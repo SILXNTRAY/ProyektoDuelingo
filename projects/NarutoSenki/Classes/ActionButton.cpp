@@ -179,6 +179,18 @@ bool ActionButton::isCanClick()
 					return true;
 				}
 			}
+			else if (_abType == AllySwitch1 || _abType == AllySwitch2)
+			{
+				auto player = getGameLayer()->currentPlayer;
+				State s = player->getState();
+				bool blocked = (s == State::NATTACK || s == State::SATTACK ||
+					s == State::OATTACK || s == State::O2ATTACK ||
+					player->_skillChangeBuffValue != 0);
+				if (getTimeCount() == 0 && !blocked && s != State::DEAD)
+				{
+					return true;
+				}
+			}
 			else
 			{
 				if (getTimeCount() == 0 && _delegate->getSkillFinish() && !_isLock && !_delegate->ougisLayer)
@@ -551,7 +563,7 @@ void ActionButton::reset()
 	}
 }
 
-void ActionButton::setLock()
+void ActionButton::setLock(bool showX)
 {
 	if (markSprite)
 	{
@@ -568,14 +580,41 @@ void ActionButton::setLock()
 		proressblinkMask->setVisible(false);
 	}
 	_isLock = true;
+
+	if (showX)
+	{
+		if (cdLabel)
+		{
+			cdLabel->removeFromParent();
+			unschedule(schedule_selector(ActionButton::updateCDLabel));
+		}
+		cdLabel = CCLabelBMFont::create("X", Fonts::Default);
+#if (CC_TARGET_PLATFORM == CC_PLATFORM_LINUX || CC_TARGET_PLATFORM == CC_PLATFORM_WIN32 || CC_TARGET_PLATFORM == CC_PLATFORM_MAC)
+		cdLabel->setScale(0.3f);
+#else
+		cdLabel->setScale(0.4f);
+#endif
+		cdLabel->setPosition(Vec2(getPositionX() + getContentSize().width * getScale() / 2,
+			getPositionY() + getContentSize().height * getScale() / 2));
+		_delegate->addChild(cdLabel, 200);
+	}
 }
 
+// AFTER
 void ActionButton::unLock()
 {
 	if (markSprite)
 	{
 		markSprite->stopAllActions();
 		markSprite->setPercentage(0);
+	}
+
+	_isLock = false;
+
+	if (cdLabel && getTimeCount() == 0)
+	{
+		cdLabel->removeFromParent();
+		cdLabel = nullptr;
 	}
 
 	uint32_t ckr = getGameLayer()->currentPlayer->getCKR();

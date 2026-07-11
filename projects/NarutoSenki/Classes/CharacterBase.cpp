@@ -287,13 +287,45 @@ void CharacterBase::update(float dt)
 		_shadow->setPosition(Vec2(getPositionX(), _originY ? _originY : getPositionY()));
 	}
 
+	// Universal duel-arena wall bounce. WALK already clamps via
+	// _desiredPosition further down, and DEAD shouldn't be corrected, but
+	// every other movement source (knockback, knockdown launches, charge
+	// dashes, jumps -- anything using a MoveBy/JumpTo action) sets position
+	// directly and has no bounds awareness of its own. Rather than teach
+	// each one individually, just catch the overshoot here every frame:
+	// clamp back to the wall and flip to face away from it.
+	if (isDuelMode() && _state != State::WALK && _state != State::DEAD)
+	{
+		auto tileWidth = getGameLayer()->currentMap->getTileSize().width;
+		float minX = 3 * tileWidth;
+		float maxX = (getGameLayer()->currentMap->getMapSize().width - 3) * tileWidth;
+
+		float curX = getPositionX();
+		if (curX < minX)
+		{
+			setPositionX(minX);
+			if (_isFlipped)
+				setCharFlip();
+		}
+		else if (curX > maxX)
+		{
+			setPositionX(maxX);
+			if (!_isFlipped)
+				setCharFlip();
+		}
+	}
+
 	if (!_isControlled && _state != State::DEAD)
 	{
 		if (isPlayerOrCom())
 		{
 			if (isNotGuardian())
 			{
-				if (isKonohaGroup() && getPositionX() <= 11 * 32)
+				if (isDuelMode())
+				{
+					_isHealing = false;
+				}
+				else if (isKonohaGroup() && getPositionX() <= 11 * 32)
 				{
 					_isHealing = true;
 					if (getHpPercent() < 1.0f)
@@ -358,8 +390,16 @@ void CharacterBase::update(float dt)
 			}
 		}
 
-		float posX = MIN(getGameLayer()->currentMap->getMapSize().width * getGameLayer()->currentMap->getTileSize().width,
-						 MAX(0, _desiredPosition.x));
+		float mapMinX = 0;
+		float mapMaxX = getGameLayer()->currentMap->getMapSize().width * getGameLayer()->currentMap->getTileSize().width;
+
+		if (isDuelMode())
+		{
+			mapMinX += 3 * getGameLayer()->currentMap->getTileSize().width;
+			mapMaxX -= 3 * getGameLayer()->currentMap->getTileSize().width;
+		}
+
+		float posX = MIN(mapMaxX, MAX(mapMinX, _desiredPosition.x));
 
 		// map height		: 10
 		// backgroud height	: 4.5
@@ -504,10 +544,14 @@ void CharacterBase::acceptAttack(Ref *object)
 								{
 									unschedule(schedule_selector(CharacterBase::setAI));
 									_isAI = false;
-									// Set controlled character to player
 									getGameLayer()->controlChar = this;
 									getGameLayer()->currentPlayer = this;
+									_isCanSkill1 = true;
+									_isCanSkill2 = true;
+									_isCanSkill3 = true;
+									getGameLayer()->setSkillFinish(true);   // ADD THIS
 									getGameLayer()->getHudLayer()->updateSkillButtons();
+									getGameLayer()->getHudLayer()->_isAllButtonLocked = false;
 									idle();
 								}
 
@@ -515,6 +559,8 @@ void CharacterBase::acceptAttack(Ref *object)
 								{
 									doAI();
 									getGameLayer()->getHudLayer()->_isAllButtonLocked = true;
+									// Remove currentPlayer so joystick has no target to move
+									
 								}
 								changeGroup();
 							}
@@ -1590,6 +1636,9 @@ void CharacterBase::setItem(ABType type)
 	if (_isControlled)
 		return;
 
+	if (isDuelMode())
+		return;
+
 	if (getName() == HeroEnum::Kankuro ||
 		getName() == HeroEnum::Chiyo ||
 		getName() == HeroEnum::Kiba ||
@@ -1987,9 +2036,7 @@ void CharacterBase::setAttackBox(const string &effectType)
 			increaseHpAndUpdateUI(260);
 
 			if (isPlayer())
-			{
 				getGameLayer()->setHPLose(getHpPercent());
-			}
 
 			_attackType = _spcAttackType1;
 			_attackValue = getSpcAttackValue1();
@@ -3056,7 +3103,8 @@ void CharacterBase::setMon(const string &monName)
 		monster->setPosition(Vec2(_isFlipped ? getPositionX() - 144 : getPositionX() + 144, getPositionY() - 32 + 1));
 		monster->attack(NAttack);
 	}
-	else if (monName == "SansyoBlue")
+	else if (monName == "SansyoBlue" ||
+		     monName == "RashomonRed")
 	{
 		monster->setPosition(Vec2(_isFlipped ? getPositionX() - 48 : getPositionX() + 48, getPositionY() - 32 + 2));
 		monster->attack(NAttack);
@@ -3262,6 +3310,14 @@ void CharacterBase::setMon(const string &monName)
 	{
 		monster->attack(NAttack);
 		monster->setDirectMove(128, 2.0f, false);
+	}
+	else if (monName == "FutonSRK3" ||
+		     monName == "OrochiIkazuchi" ||
+			 monName == "FutonSRK4")
+	{
+	    monster->setPosition(Vec2(_isFlipped ? getPositionX() - 128 : getPositionX() + 128, getPositionY()));
+		monster->attack(NAttack);
+		monster->setDirectMove(156, 2.0f, false);
 	}
 	else if (monName == "FutonSRK2" ||
 			 monName == "FutonSRK")
@@ -4652,7 +4708,7 @@ CharacterBase::findEnemyBy(const vector<T *> &list, int searchRange, bool master
 				distance = sp.getLength();
 			}
 
-			if (abs(sp.x) < (searchRange ? searchRange : kAttackRange))
+			if (abs(sp.x) < (searchRange ? searchRange : kAttackRange) || isDuelMode())
 			{
 				if (target->_isTaunt)
 				{
@@ -4723,7 +4779,7 @@ CharacterBase::findEnemy2By(const vector<T *> &list)
 
 		sp = target->getPosition() - getPosition();
 		distance = sp.getLength();
-		if (abs(sp.x) < kAttackRange)
+		if(abs(sp.x) < kAttackRange || isDuelMode())
 		{
 			if (target->isNotClone() && target->isNotSummon())
 			{
@@ -4908,10 +4964,31 @@ void CharacterBase::stepOn()
 {
 	Vec2 moveDirection;
 
-	if (isKonohaGroup())
-		moveDirection = Vec2(1, 0).getNormalized();
+	if (isDuelMode())
+	{
+		// No target to chase in the confined duel arena -- patrol back and
+		// forth between the walls instead of walking into one forever.
+		if (_duelWanderDir == 0)
+			_duelWanderDir = isKonohaGroup() ? 1 : -1;
+
+		auto tileWidth = getGameLayer()->currentMap->getTileSize().width;
+		float mapMinX = 3 * tileWidth;
+		float mapMaxX = (getGameLayer()->currentMap->getMapSize().width - 3) * tileWidth;
+
+		if (_duelWanderDir > 0 && getPositionX() >= mapMaxX - 4)
+			_duelWanderDir = -1;
+		else if (_duelWanderDir < 0 && getPositionX() <= mapMinX + 4)
+			_duelWanderDir = 1;
+
+		moveDirection = Vec2((float)_duelWanderDir, 0).getNormalized();
+	}
 	else
-		moveDirection = Vec2(-1, 0).getNormalized();
+	{
+		if (isKonohaGroup())
+			moveDirection = Vec2(1, 0).getNormalized();
+		else
+			moveDirection = Vec2(-1, 0).getNormalized();
+	}
 
 	walk(moveDirection);
 }
@@ -4936,6 +5013,11 @@ bool CharacterBase::stepBack()
 	}
 	else
 	{
+		if (isDuelMode())
+		{
+			walk(Vec2(-moveDirection.x, 0));
+			return true;
+		}
 		return false;
 	}
 }
@@ -5030,6 +5112,9 @@ bool CharacterBase::stepBack2()
 // [For AI] 检查角色是否需要使用【拉面】回血，若血量低于界限，则返回true
 bool CharacterBase::checkRetri()
 {
+	if (isDuelMode())
+		return false;
+
 	if (_isCanItem1 && getCoin() >= 50)
 	{
 		if (getGameLayer()->_isHardCoreGame)

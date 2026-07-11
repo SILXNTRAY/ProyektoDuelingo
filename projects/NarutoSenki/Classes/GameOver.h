@@ -20,6 +20,7 @@ public:
 
 	Sprite *refreshBtn = nullptr;
 	MenuItem *upload_btn = nullptr;
+	MenuItem *start_btn = nullptr;
 
 	string detailRecord;
 	float finnalScore;
@@ -27,11 +28,13 @@ public:
 	static GameOver *create(RenderTexture *snapshoot);
 
 private:
-	const char *resultChar = nullptr;
+	// FIXED
+	string resultChar;
 
 	void onBackToMenu(Ref *sender);
 	void listResult();
 	void onCancel(Ref *sender);
 	void onLeft(Ref *sender);
 	void onUPloadBtn(Ref *sender);
+	void onStartNextStage(Ref *sender);
 };

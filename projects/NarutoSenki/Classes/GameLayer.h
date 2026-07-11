@@ -37,13 +37,13 @@ class BattleRuntimeSystem;
 class SpawnSystem;
 struct SessionState;
 
-extern GameLayer *_gLayer;
+extern GameLayer* _gLayer;
 extern bool _isFullScreen;
 #if (CC_TARGET_PLATFORM == CC_PLATFORM_LINUX || CC_TARGET_PLATFORM == CC_PLATFORM_WIN32)
-static GLFWwindow *_window = nullptr;
+static GLFWwindow* _window = nullptr;
 #endif
 
-inline GameLayer *getGameLayer()
+inline GameLayer* getGameLayer()
 {
 	return _gLayer;
 }
@@ -59,43 +59,61 @@ public:
 	GameLayer();
 	~GameLayer();
 
-	TMXTiledMap *currentMap;
-	CharacterBase *currentPlayer;
+	TMXTiledMap* currentMap;
+	CharacterBase* currentPlayer;
+
+	vector<string> _allyRoster;
+	vector<string> _enemyAllyRoster;
+	void switchToAllySlot(int slotIndex);
+
+	// AI-side mirror of the player's manual ally swap. Not a priority
+	// action — it just waits for its cooldown and a clear moment, then
+	// swaps like the player would via the HUD button.
+	float _enemyAllySwitchCooldown = 15.0f; // seconds before AI's first swap attempt
+	void switchEnemyAllySlot(int slotIndex);
+	void updateEnemyAllySwitch(float dt);
 
 	uint32_t _second;
 	uint32_t _minute;
 	int mapId;
 
-	const char *kName;
-	const char *aName;
+	const char* kName;
+	const char* aName;
 	int kEXPBound;
 	int aEXPBound;
 
 	bool _isAttackButtonRelease;
 	bool _hasSpawnedGuardian;
+	bool _enableGuardian = true;
 	// int _guardianNum;
-	vector<Flog *> _KonohaFlogArray;
-	vector<Flog *> _AkatsukiFlogArray;
-	vector<Tower *> _TowerArray;
-	vector<Hero *> _CharacterArray;
+	vector<Flog*> _KonohaFlogArray;
+	vector<Flog*> _AkatsukiFlogArray;
+	vector<Tower*> _TowerArray;
+	vector<Hero*> _CharacterArray;
 
 	bool _isShacking;
 
 	int _playNum;
 	void checkBackgroundMusic(float dt);
 
-	PROP(HudLayer *, _hudLayer, HudLayer);
-	void onHUDInitialized(const OnHUDInitializedCallback &callback);
+	PROP(HudLayer*, _hudLayer, HudLayer);
+	// BGLayer is a sibling in the scene, not a child of GameLayer, so it
+	// doesn't move automatically when updateViewPoint() recenters GameLayer
+	// for the duel arena map -- this reference lets that centering also
+	// keep the background in sync instead of only shifting the TMX map,
+	// characters, and coded borders while the background stays put.
+	PROP(BGLayer*, _bgLayer, BgLayer);
+	void onHUDInitialized(const OnHUDInitializedCallback& callback);
 	bool isHUDInit();
 	void setTowerState(int charId);
 
 	PROP_UInt(totalKills, TotalKills);
 	PROP_UInt(totalTime, TotalTime);
 
-	SpriteBatchNode *skillEffectBatch;
-	SpriteBatchNode *damageEffectBatch;
-	SpriteBatchNode *bulletBatch;
-	SpriteBatchNode *shadowBatch;
+	SpriteBatchNode* skillEffectBatch;
+	SpriteBatchNode* damageEffectBatch;
+	SpriteBatchNode* bulletBatch;
+	SpriteBatchNode* shadowBatch;
 
 	bool init();
 	void initTileMap();
@@ -108,8 +126,8 @@ public:
 	void updateViewPoint(float dt);
 	void updateGameTime(float dt);
 
-	Hero *addHero(const HeroData &data, int charId);
-	Hero *addHero(const string &name, Role role, Group group, Vec2 spawnPoint, int charNo);
+	Hero* addHero(const HeroData& data, int charId);
+	Hero* addHero(const string& name, Role role, Group group, Vec2 spawnPoint, int charNo);
 	void addFlog(float dt);
 
 	void attackButtonClick(ABType type);
@@ -131,19 +149,20 @@ public:
 
 	void updateHudSkillButtons();
 	void setHPLose(float percent);
+	void setEnemyHPLose(float percent);
 	void setCKRLose(bool isCRK2);
 
-	void setReport(const string &slayer, const string &dead, uint32_t killNum);
+	void setReport(const string& slayer, const string& dead, uint32_t killNum);
 	void clearDoubleClick();
 	void resetStatusBar();
-	void setCoin(const char *value);
+	void setCoin(const char* value);
 	void removeOugisMark(int type);
-	void setOugis(CharacterBase *sender);
+	void setOugis(CharacterBase* sender);
 	void removeOugis();
 
-	CharacterBase *ougisChar;
-	CharacterBase *controlChar;
-	Layer *blend;
+	CharacterBase* ougisChar;
+	CharacterBase* controlChar;
+	Layer* blend;
 
 	void onLeft();
 
@@ -158,24 +177,32 @@ public:
 	bool _isStarted;
 	bool _isExiting;
 
-	const char *getGuardianGroup()
+	// Deathmatch "next stage" quick restart -- set by GameOver's start_btn
+	// before triggering the normal _isExiting teardown, so onLeft() skips
+	// the usual "back to menu" Lua handoff and launches straight into a
+	// fresh Deathmatch run with the same character(s) instead.
+	bool _quickRestartDeathmatch = false;
+	string _retainedPlayerChar;
+	vector<string> _retainedAllyRoster;
+
+	const char* getGuardianGroup()
 	{
 		return playerGroup == Group::Konoha ? TowerEnum::AkatsukiCenter : TowerEnum::KonohaCenter;
 	}
 
 	bool _isGear;
 	bool _isPause;
-	GearLayer *_gearLayer;
+	GearLayer* _gearLayer;
 
-	void clearAllFlogsMainTarget(CharacterBase *target);
-	void clearAllUnitsMainTarget(CharacterBase *target);
+	void clearAllFlogsMainTarget(CharacterBase* target);
+	void clearAllUnitsMainTarget(CharacterBase* target);
 
 	CREATE_FUNC(GameLayer);
 	static bool checkHasAnyMovement();
 	static int getMapCount();
 
 #if (CC_TARGET_PLATFORM == CC_PLATFORM_LINUX || CC_TARGET_PLATFORM == CC_PLATFORM_WIN32)
-	static void keyEventHandle(GLFWwindow *window, int key, int scancode, int action, int modes);
+	static void keyEventHandle(GLFWwindow* window, int key, int scancode, int action, int modes);
 #elif (CC_TARGET_PLATFORM == CC_PLATFORM_MAC)
 	static void keyEventHandle(int key, int keyState);
 #endif
@@ -198,7 +225,7 @@ private:
 
 	void invokeAllCallbacks();
 
-	inline Vec2 getCustomSpawnPoint(HeroData &data);
+	inline Vec2 getCustomSpawnPoint(HeroData& data);
 
 	bool isHUDInitialized = false;
 	bool is4V4Mode = false;

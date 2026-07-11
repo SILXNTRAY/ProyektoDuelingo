@@ -119,6 +119,11 @@ public:
 	float				_backY;
 	float				_diretionY;
 
+	// Duel-mode-arena wander direction for stepOn() when there's no target
+	// to chase. 0 = not yet picked, 1 = walking right, -1 = walking left.
+	// Flips when it reaches a wall instead of pushing into it forever.
+	int8_t				_duelWanderDir = 0;
+
 	int					lbAttackerId = -1;
 	uint32_t			lostBloodValue;
 	int					gearCKRValue;

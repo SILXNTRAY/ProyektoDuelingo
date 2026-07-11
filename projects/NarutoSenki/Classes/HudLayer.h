@@ -45,6 +45,30 @@ public:
 	Sprite *status_hpMark;
 	ProgressTimer *status_expbar;
 
+	// Duel mode enemy status bar (top-right, mirrored)
+	Sprite* enemy_status_bar = nullptr;
+	Sprite* enemy_status_hpbar = nullptr;
+	Sprite* enemy_status_hpMark = nullptr;
+	ProgressTimer* enemy_status_expbar = nullptr;
+	Menu* enemy_gearMenu = nullptr;
+
+	CCLabelBMFont* enemy_hpLabel = nullptr;
+
+	Sprite* enemy_gear1 = nullptr;
+	Sprite* enemy_gear2 = nullptr;
+	Sprite* enemy_gear3 = nullptr;
+
+	// Duel mode: cosmetic display of the enemy AI's benched allies,
+	// mirroring the player's allySwitch1/2Button slots. Not clickable —
+	// the enemy AI doesn't actually swap yet.
+	Sprite* enemyAllyIcon1 = nullptr;
+	Sprite* enemyAllyIcon2 = nullptr;
+
+	// Duel mode: swap-to-ally buttons, placed below the gear icons.
+	ActionButton* allySwitch1Button = nullptr;
+	ActionButton* allySwitch2Button = nullptr;
+	bool _allySwitchTouchPriorityFixed = false;
+
 	ActionButton *nAttackButton;
 	ActionButton *skill1Button;
 	ActionButton *skill2Button;
@@ -89,6 +113,9 @@ public:
 	void setHPLose(float percent);
 	void setCKRLose(bool isCRK2);
 	void setEXPLose();
+	bool isDuelMode();
+
+	void setEnemyHPLose(float percent);
 
 	void initHeroInterface();
 	void attackButtonClick(ABType type);
@@ -138,6 +165,9 @@ public:
 
 	void updateGears();
 	void initGearButton(const string &charName);
+	void refreshSkillIcons(const string& charName);
+	void refreshEnemyAvatar(const string& charName);
+	void updateAllySwitchButtons(float dt);
 
 	void initSkillButtons();
 	void setSkillButtons(bool isVisable);

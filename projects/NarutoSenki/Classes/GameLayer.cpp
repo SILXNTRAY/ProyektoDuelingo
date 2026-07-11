@@ -1,4 +1,4 @@
-#include "Defines.h"
+﻿#include "Defines.h"
 #include "CharacterBase.h"
 #include "GameLayer.h"
 #include "BGLayer.h"
@@ -10,11 +10,13 @@
 #include "Systems/BattleRuntimeSystem.hpp"
 #include "Systems/SpawnSystem.hpp"
 #include "Systems/SessionState.hpp"
+#include "Utils/Cocos2dxHelper.hpp"
+#include <algorithm>
 
-GameLayer *_gLayer = nullptr;
+GameLayer* _gLayer = nullptr;
 bool _isFullScreen = false;
 
-void BattleRuntimeSystem::onGameStart(GameLayer *layer, bool skipInitFlogs, float flogSpawnDuration) const
+void BattleRuntimeSystem::onGameStart(GameLayer* layer, bool skipInitFlogs, float flogSpawnDuration) const
 {
 	if (!layer)
 		return;
@@ -40,7 +42,7 @@ void BattleRuntimeSystem::onGameStart(GameLayer *layer, bool skipInitFlogs, floa
 	}
 }
 
-void BattleRuntimeSystem::updateGameTime(GameLayer *layer) const
+void BattleRuntimeSystem::updateGameTime(GameLayer* layer) const
 {
 	if (!layer)
 		return;
@@ -51,12 +53,20 @@ void BattleRuntimeSystem::updateGameTime(GameLayer *layer) const
 		layer->_minute += 1;
 		layer->_second = 0;
 	}
-	auto tempTime = format("{:02d}:{:02d}", layer->_minute, layer->_second);
-	layer->getHudLayer()->gameClock->setString(tempTime.c_str());
+	// Deathmatch (endless arcade) repurposes the clock label to show
+	// "Stage X" instead — the handler sets that text itself, so don't
+	// stomp it with the normal MM:SS format here.
+	if (getGameMode() != GameMode::Deathmatch)
+	{
+		auto tempTime = format("{:02d}:{:02d}", layer->_minute, layer->_second);
+		layer->getHudLayer()->gameClock->setString(tempTime.c_str());
+	}
 	layer->setTotalTime(layer->getTotalTime() + 1);
+
+	layer->updateEnemyAllySwitch(1.0f);
 }
 
-void BattleRuntimeSystem::updateViewPoint(GameLayer *layer) const
+void BattleRuntimeSystem::updateViewPoint(GameLayer* layer) const
 {
 	if (!layer || !layer->currentPlayer)
 		return;
@@ -69,14 +79,32 @@ void BattleRuntimeSystem::updateViewPoint(GameLayer *layer) const
 	else
 		playerPoint = layer->currentPlayer->getPosition();
 
-	int x = MAX(playerPoint.x, winSize.width / 2);
-	int y = MAX(playerPoint.y, winSize.width / 2);
-	x = MIN(x, (layer->currentMap->getMapSize().width * layer->currentMap->getTileSize().width) - winSize.width / 2);
-	y = MIN(y, (layer->currentMap->getMapSize().height * layer->currentMap->getTileSize().height) - winSize.height / 2);
-	layer->setPosition(Vec2(winSize.width / 2, y) - Vec2(x, y));
+	if (isDuelMode())
+	{
+		float tileWidth = layer->currentMap->getTileSize().width;
+		float tileHeight = layer->currentMap->getTileSize().height;
+
+		float mapPixelWidth = layer->currentMap->getMapSize().width * tileWidth;
+		float mapPixelHeight = layer->currentMap->getMapSize().height * tileHeight;
+
+		float mapCenterX = mapPixelWidth / 2.0f;
+		float mapCenterY = mapPixelHeight / 2.0f;
+		float cameraX = winSize.width / 2.0f - mapCenterX;
+		float cameraY = winSize.height / 2.0f - mapCenterY;
+
+		layer->setPosition(Vec2(cameraX, cameraY));
+	}
+	else
+	{
+		int x = MAX(playerPoint.x, winSize.width / 2);
+		int y = MAX(playerPoint.y, winSize.width / 2);
+		x = MIN(x, (layer->currentMap->getMapSize().width * layer->currentMap->getTileSize().width) - winSize.width / 2);
+		y = MIN(y, (layer->currentMap->getMapSize().height * layer->currentMap->getTileSize().height) - winSize.height / 2);
+		layer->setPosition(Vec2(winSize.width / 2, y) - Vec2(x, y));
+	}
 }
 
-void SpawnSystem::initMatchUnits(GameLayer *layer) const
+void SpawnSystem::initMatchUnits(GameLayer* layer) const
 {
 	if (!layer)
 		return;
@@ -146,7 +174,7 @@ bool GameLayer::init()
 	setTouchEnabled(true);
 
 	_gLayer = this;
-	const auto &gd = getGameModeHandler()->gd;
+	const auto& gd = getGameModeHandler()->gd;
 	_enableGear = gd.enableGear;
 	_isHardCoreGame = gd.isHardCore;
 	_isRandomChar = gd.isRandomChar;
@@ -176,6 +204,7 @@ void GameLayer::onEnter()
 
 	if (_isSurrender)
 	{
+		getGameModeHandler()->onSurrender();
 		onGameOver(false);
 	}
 }
@@ -190,7 +219,7 @@ void GameLayer::onExit()
 	}
 }
 
-void GameLayer::onHUDInitialized(const OnHUDInitializedCallback &callback)
+void GameLayer::onHUDInitialized(const OnHUDInitializedCallback& callback)
 {
 	callbackssList.push_back(callback);
 }
@@ -209,13 +238,26 @@ void GameLayer::initTileMap()
 		CCMessageBox("Not found any map", "[Error] Not found any map");
 		return;
 	}
-	mapId = random(mapCount) + 1;
+	if (isDuelMode())
+	{
+		mapId = 6;
+	}
+	else
+	{
+		int roll;
+		do {
+			roll = random(mapCount) + 1;
+		} while (roll == 6);
+		mapId = roll;
+	}
 	currentMap = TMXTiledMap::create(GetMapPath(mapId));
 	addChild(currentMap, kMapOrder);
 }
 
 void GameLayer::initGard()
 {
+	if (!_enableGuardian)
+		return;
 	setRand();
 	int index = random(2);
 	auto guardianName = index == 0 ? GuardianEnum::Roshi : GuardianEnum::Han;
@@ -268,19 +310,19 @@ void GameLayer::initHeros()
 
 	_isOugis2Game = true;
 
-	TMXObjectGroup *group = currentMap->objectGroupNamed("object");
+	TMXObjectGroup* group = currentMap->objectGroupNamed("object");
 	if (group == nullptr)
 	{
 		CCMessageBox("Map is missing the 'object' layer", "[Error] Bad map");
 		return;
 	}
-	CCArray *objectArray = group->getObjects();
+	CCArray* objectArray = group->getObjects();
 
 	// 4v4 spawn layout
 	if (is4V4Mode)
 	{
-		auto &hero1 = herosDataVector.at(0);
-		auto &hero5 = herosDataVector.at(4);
+		auto& hero1 = herosDataVector.at(0);
+		auto& hero5 = herosDataVector.at(4);
 
 		hero1.setSpawnPoint(getCustomSpawnPoint(hero1));
 		addHero(hero1, 1);
@@ -290,7 +332,7 @@ void GameLayer::initHeros()
 	}
 
 	int i = 0;
-	for (auto &data : herosDataVector)
+	for (auto& data : herosDataVector)
 	{
 		if (data.isInit)
 			continue;
@@ -307,10 +349,10 @@ void GameLayer::initHeros()
 				mapPos -= MapPosCount;
 		}
 
-		Ref *mapObject = objectArray->objectAtIndex(mapPos);
-		auto mapdict = (CCDictionary *)mapObject;
-		int x = ((CCString *)mapdict->objectForKey("x"))->intValue();
-		int y = ((CCString *)mapdict->objectForKey("y"))->intValue();
+		Ref* mapObject = objectArray->objectAtIndex(mapPos);
+		auto mapdict = (CCDictionary*)mapObject;
+		int x = ((CCString*)mapdict->objectForKey("x"))->intValue();
+		int y = ((CCString*)mapdict->objectForKey("y"))->intValue();
 		data.setSpawnPoint(Vec2(x, y));
 
 		if (is4V4Mode)
@@ -329,18 +371,19 @@ void GameLayer::initHeros()
 
 	// Tower HP bar color depends on currentPlayer group, so towers must be
 	// initialized after at least one hero/player is created.
-	initTower();
+	if (!isDuelMode())
+		initTower();
 
 	schedule(schedule_selector(GameLayer::updateViewPoint), 0.00f);
 	scheduleOnce(schedule_selector(GameLayer::playGameOpeningAnimation), 0.5f);
 }
 
-Hero *GameLayer::addHero(const HeroData &data, int charId)
+Hero* GameLayer::addHero(const HeroData& data, int charId)
 {
 	return addHero(data.name, data.role, data.group, data.spawnPoint, charId);
 }
 
-Hero *GameLayer::addHero(const string &name, Role role, Group group, Vec2 spawnPoint, int charId)
+Hero* GameLayer::addHero(const string& name, Role role, Group group, Vec2 spawnPoint, int charId)
 {
 	auto hero = Provider::create(name, role, group);
 	if (hero->isPlayer())
@@ -360,7 +403,8 @@ Hero *GameLayer::addHero(const string &name, Role role, Group group, Vec2 spawnP
 	hero->setShadows();
 	hero->idle();
 	hero->setCharId(charId);
-	hero->schedule(schedule_selector(CharacterBase::setRestore2), 1.0f);
+	if (!isDuelMode())
+		hero->schedule(schedule_selector(CharacterBase::setRestore2), 1.0f);
 
 	addChild(hero, -hero->getPositionY());
 	_CharacterArray.push_back(hero);
@@ -402,7 +446,7 @@ void GameLayer::addFlog(float dt)
 	auto AkatsukiFlogName = aName;
 
 	int i;
-	Flog *flog;
+	Flog* flog;
 	float mainPosY;
 	for (i = 0; i < kFlogCount; i++)
 	{
@@ -443,24 +487,24 @@ void GameLayer::initTower()
 {
 	addSprites(format("Unit/Tower/Tower{}.plist", mapId));
 
-	TMXObjectGroup *metaGroup = currentMap->objectGroupNamed("meta");
-	CCArray *metaArray = metaGroup->getObjects();
-	Ref *pObject;
+	TMXObjectGroup* metaGroup = currentMap->objectGroupNamed("meta");
+	CCArray* metaArray = metaGroup->getObjects();
+	Ref* pObject;
 	int i = 0;
 
 	CCARRAY_FOREACH(metaArray, pObject)
 	{
-		auto dict = (CCDictionary *)pObject;
+		auto dict = (CCDictionary*)pObject;
 
-		int metaX = ((CCString *)dict->objectForKey("x"))->intValue();
-		int metaY = ((CCString *)dict->objectForKey("y"))->intValue();
+		int metaX = ((CCString*)dict->objectForKey("x"))->intValue();
+		int metaY = ((CCString*)dict->objectForKey("y"))->intValue();
 
-		int metaWidth = ((CCString *)dict->objectForKey("width"))->intValue();
-		int metaHeight = ((CCString *)dict->objectForKey("height"))->intValue();
+		int metaWidth = ((CCString*)dict->objectForKey("width"))->intValue();
+		int metaHeight = ((CCString*)dict->objectForKey("height"))->intValue();
 
-		auto name = ((CCString *)dict->objectForKey("name"))->m_sString;
+		auto name = ((CCString*)dict->objectForKey("name"))->m_sString;
 
-		Tower *tower = Tower::create();
+		Tower* tower = Tower::create();
 		char towerName[7] = "abcdef";
 		strncpy(towerName, name.c_str(), 6);
 		if (is_same(towerName, kGroupKonoha))
@@ -541,12 +585,17 @@ void GameLayer::setHPLose(float percent)
 	_hudLayer->setHPLose(percent);
 }
 
+void GameLayer::setEnemyHPLose(float percent)
+{
+	_hudLayer->setEnemyHPLose(percent);
+}
+
 void GameLayer::setCKRLose(bool isCRK2)
 {
 	_hudLayer->setCKRLose(isCRK2);
 }
 
-void GameLayer::setReport(const string &slayer, const string &dead, uint32_t killNum)
+void GameLayer::setReport(const string& slayer, const string& dead, uint32_t killNum)
 {
 	_hudLayer->setReport(slayer, dead, killNum);
 }
@@ -556,7 +605,7 @@ void GameLayer::resetStatusBar()
 	_hudLayer->status_hpbar->setRotation(0);
 }
 
-void GameLayer::setCoin(const char *value)
+void GameLayer::setCoin(const char* value)
 {
 	_hudLayer->setCoin(value);
 }
@@ -669,21 +718,21 @@ void GameLayer::clearDoubleClick()
 
 void GameLayer::JoyStickRelease()
 {
+	if (getHudLayer()->_isAllButtonLocked)  // add this guard
+		return;
 	if (currentPlayer->getState() == State::WALK)
-	{
 		currentPlayer->idle();
-	}
 }
 
 void GameLayer::JoyStickUpdate(Vec2 direction)
 {
+	if (getHudLayer()->_isAllButtonLocked)  // add this guard
+		return;
 	if (!ougisChar)
-	{
-		// CCLOG("x:%f,y:%f",direction.x,direction.y);
 		currentPlayer->walk(direction);
-	}
 }
 
+// AFTER
 void GameLayer::attackButtonClick(ABType type)
 {
 	if (type == NAttack)
@@ -691,7 +740,15 @@ void GameLayer::attackButtonClick(ABType type)
 		_isAttackButtonRelease = false;
 	}
 
-	if (type == Item1)
+	if (type == AllySwitch1)
+	{
+		switchToAllySlot(0);
+	}
+	else if (type == AllySwitch2)
+	{
+		switchToAllySlot(1);
+	}
+	else if (type == Item1)
 	{
 		currentPlayer->setItem(type);
 	}
@@ -699,6 +756,275 @@ void GameLayer::attackButtonClick(ABType type)
 	{
 		currentPlayer->attack(type);
 	}
+}
+
+// BEFORE
+// AFTER
+void GameLayer::switchToAllySlot(int slotIndex)
+{
+	if (slotIndex < 0 || slotIndex >= (int)_allyRoster.size() || !currentPlayer || currentPlayer->getState() == State::DEAD)
+		return;
+
+	// Don't allow swapping while mid-attack/skill — avoids interrupting
+	// an active hitbox/animation and the state confusion that would cause.
+	State s = currentPlayer->getState();
+	if (s == State::NATTACK || s == State::SATTACK || s == State::OATTACK || s == State::O2ATTACK)
+		return;
+
+	string nextName = _allyRoster[slotIndex];
+
+	Hero* oldHero = (Hero*)currentPlayer;
+	Vec2 swapPos = oldHero->getPosition();
+	Group grp = oldHero->getGroup();
+	float hpPercent = oldHero->getHpPercent();
+	int oldCharId = oldHero->getCharId();
+
+	oldHero->setSkillEffect("smk");
+
+	string oldName = oldHero->getName();
+
+	// Kuchiyose summons / kugutsu puppets (e.g. Kankuro's Karasu/Sanshouuo/Saso,
+	// Kakuzu's masks, Chiyo's Parents) are Hero-derived and get registered in
+	// BOTH oldHero->getMonsterArray() and the global _CharacterArray (see
+	// CharacterBase::setClone()). Clean those up via this _CharacterArray pass
+	// FIRST, and strip them out of the monster array as we go — otherwise the
+	// monster-array pass below would call removeFromParent() on a pointer
+	// that's about to be (or already was) freed here, a use-after-free that
+	// left them stuck half-despawned.
+	for (auto it = _CharacterArray.begin(); it != _CharacterArray.end();)
+	{
+		Hero* hero = *it;
+		if (hero != oldHero && (hero->getMaster() == oldHero || hero->getSecMaster() == oldHero))
+		{
+			CCNotificationCenter::sharedNotificationCenter()->removeObserver(hero, "acceptAttack");
+			hero->unscheduleAllSelectors();
+			hero->stopAllActions();
+			if (hero->_shadow)
+				hero->_shadow->removeFromParent();
+
+			std::erase(oldHero->getMonsterArray(), (CharacterBase*)hero);
+
+			hero->removeFromParent();
+			it = _CharacterArray.erase(it);
+		}
+		else
+		{
+			++it;
+		}
+	}
+
+	// Whatever's left in the monster array now is Monster-derived (e.g. from
+	// setMon()) and was never registered in _CharacterArray — safe to clean
+	// up directly.
+	if (oldHero->hasMonsterArrayAny())
+	{
+		for (auto mo : oldHero->getMonsterArray())
+		{
+			CCNotificationCenter::sharedNotificationCenter()->removeObserver(mo, "acceptAttack");
+			mo->unscheduleAllSelectors();
+			mo->stopAllActions();
+			if (mo->_shadow)
+				mo->_shadow->removeFromParent();
+			mo->removeFromParent();
+		}
+		oldHero->getMonsterArray().clear();
+	}
+
+	_CharacterArray.erase(std::remove(_CharacterArray.begin(), _CharacterArray.end(), oldHero), _CharacterArray.end());
+
+	CCNotificationCenter::sharedNotificationCenter()->removeObserver(oldHero, "acceptAttack");
+	oldHero->unscheduleAllSelectors();
+	oldHero->stopAllActions();
+	oldHero->removeFromParent();
+
+	_allyRoster[slotIndex] = oldName;
+
+	Hero* newHero = addHero(nextName, Role::Player, grp, swapPos, oldCharId);
+	newHero->setWalkSpeed(newHero->_originSpeed);
+
+	newHero->setCoin(3000);
+	newHero->setEXP(2500);
+	for (int i = 1; i < 6; i++)
+		newHero->changeHPbar();
+	uint32_t newMaxHP = newHero->getMaxHP() * 3;
+	newHero->setMaxHPValue(newMaxHP, false);
+	newHero->setHPValue((uint32_t)(newMaxHP * hpPercent), true);
+	newHero->increaseAllCkrs(25000);
+	newHero->enableReborn = false;
+
+	_hudLayer->setEXPLose();
+	_hudLayer->coinLabel->setString(to_cstr(newHero->getCoin()));
+	if (!newHero->isEnableSkill04())
+		_hudLayer->skill4Button->setLock();
+	if (!newHero->isEnableSkill05())
+		_hudLayer->skill5Button->setLock();
+
+	_hudLayer->initGearButton(nextName);
+	_hudLayer->updateSkillButtons();
+	_hudLayer->resetSkillButtons();
+
+	ActionButton* swappedButton = (slotIndex == 0) ? _hudLayer->allySwitch1Button : _hudLayer->allySwitch2Button;
+	if (swappedButton)
+	{
+		auto newFrame = getSpriteFrame("{}_rp.png", oldName);
+		if (newFrame)
+			swappedButton->setDisplayFrame(newFrame);
+	}
+	if (_hudLayer->allySwitch1Button)
+		_hudLayer->allySwitch1Button->beganAnimation();
+	if (_hudLayer->allySwitch2Button)
+		_hudLayer->allySwitch2Button->beganAnimation();
+
+	setHPLose(hpPercent);
+}
+
+// AI-side mirror of switchToAllySlot above, operating on the enemy hero
+// and _enemyAllyRoster instead of the player. Kept separate rather than
+// unified with a parameter, since the two sides update different HUD
+// elements (skill/gear buttons vs. the cosmetic enemy icons) and swap in
+// as different Roles (Player vs Com).
+void GameLayer::switchEnemyAllySlot(int slotIndex)
+{
+	if (slotIndex < 0 || slotIndex >= (int)_enemyAllyRoster.size())
+		return;
+
+	Group enemyGrp = (playerGroup == Group::Konoha) ? Group::Akatsuki : Group::Konoha;
+	Hero* oldHero = nullptr;
+	for (auto hero : _CharacterArray)
+	{
+		if (hero->isCom() && hero->getGroup() == enemyGrp && hero->getState() != State::DEAD)
+		{
+			oldHero = hero;
+			break;
+		}
+	}
+	if (!oldHero)
+		return;
+
+	Vec2 swapPos = oldHero->getPosition();
+	Group grp = oldHero->getGroup();
+	float hpPercent = oldHero->getHpPercent();
+	int oldCharId = oldHero->getCharId();
+
+	oldHero->setSkillEffect("smk");
+	string oldName = oldHero->getName();
+	string nextName = _enemyAllyRoster[slotIndex];
+
+	// Same dependent cleanup as switchToAllySlot — see the comments there
+	// for why the _CharacterArray pass has to run before the monster-array
+	// pass.
+	for (auto it = _CharacterArray.begin(); it != _CharacterArray.end();)
+	{
+		Hero* hero = *it;
+		if (hero != oldHero && (hero->getMaster() == oldHero || hero->getSecMaster() == oldHero))
+		{
+			CCNotificationCenter::sharedNotificationCenter()->removeObserver(hero, "acceptAttack");
+			hero->unscheduleAllSelectors();
+			hero->stopAllActions();
+			if (hero->_shadow)
+				hero->_shadow->removeFromParent();
+
+			std::erase(oldHero->getMonsterArray(), (CharacterBase*)hero);
+
+			hero->removeFromParent();
+			it = _CharacterArray.erase(it);
+		}
+		else
+		{
+			++it;
+		}
+	}
+
+	if (oldHero->hasMonsterArrayAny())
+	{
+		for (auto mo : oldHero->getMonsterArray())
+		{
+			CCNotificationCenter::sharedNotificationCenter()->removeObserver(mo, "acceptAttack");
+			mo->unscheduleAllSelectors();
+			mo->stopAllActions();
+			if (mo->_shadow)
+				mo->_shadow->removeFromParent();
+			mo->removeFromParent();
+		}
+		oldHero->getMonsterArray().clear();
+	}
+
+	_CharacterArray.erase(std::remove(_CharacterArray.begin(), _CharacterArray.end(), oldHero), _CharacterArray.end());
+
+	CCNotificationCenter::sharedNotificationCenter()->removeObserver(oldHero, "acceptAttack");
+	oldHero->unscheduleAllSelectors();
+	oldHero->stopAllActions();
+	oldHero->removeFromParent();
+
+	_enemyAllyRoster[slotIndex] = oldName;
+
+	Hero* newHero = addHero(nextName, Role::Com, grp, swapPos, oldCharId);
+	newHero->setWalkSpeed(newHero->_originSpeed);
+
+	newHero->setCoin(3000);
+	newHero->setEXP(2500);
+	for (int i = 1; i < 6; i++)
+		newHero->changeHPbar();
+	uint32_t newMaxHP = newHero->getMaxHP() * 3;
+	newHero->setMaxHPValue(newMaxHP, false);
+	newHero->setHPValue((uint32_t)(newMaxHP * hpPercent), true);
+	newHero->increaseAllCkrs(25000);
+	newHero->enableReborn = false;
+
+	newHero->doAI();
+
+	_hudLayer->refreshEnemyAvatar(nextName);
+
+	Sprite* swappedIcon = (slotIndex == 0) ? _hudLayer->enemyAllyIcon1 : _hudLayer->enemyAllyIcon2;
+	if (swappedIcon)
+	{
+		auto newFrame = getSpriteFrame("{}_rp.png", oldName);
+		if (newFrame)
+			swappedIcon->setDisplayFrame(newFrame);
+	}
+}
+
+// Ticked once a second from BattleRuntimeSystem::updateGameTime(). Purely
+// opportunistic — never interrupts anything, never forces a swap, just
+// waits for its cooldown and a clear moment.
+void GameLayer::updateEnemyAllySwitch(float dt)
+{
+	if (!isDuelMode() || _enemyAllyRoster.empty())
+		return;
+
+	_enemyAllySwitchCooldown -= dt;
+	if (_enemyAllySwitchCooldown > 0.0f)
+		return;
+
+	Group enemyGrp = (playerGroup == Group::Konoha) ? Group::Akatsuki : Group::Konoha;
+	Hero* enemyHero = nullptr;
+	for (auto hero : _CharacterArray)
+	{
+		if (hero->isCom() && hero->getGroup() == enemyGrp && hero->getState() != State::DEAD)
+		{
+			enemyHero = hero;
+			break;
+		}
+	}
+	if (!enemyHero)
+		return;
+
+	// Don't attempt while mid-attack/skill or under a combo-change buff —
+	// same reasoning as the player's guard. If blocked, just wait and
+	// re-check next tick rather than forcing the swap.
+	State s = enemyHero->getState();
+	bool blocked = (s == State::NATTACK || s == State::SATTACK || s == State::OATTACK || s == State::O2ATTACK) ||
+		(enemyHero->_skillChangeBuffValue != 0);
+	if (blocked)
+		return;
+
+	setRand();
+	int slotIndex = random((int)_enemyAllyRoster.size());
+	switchEnemyAllySlot(slotIndex);
+
+	// Wait at least 20-40s (randomized) before considering another swap.
+	setRand();
+	_enemyAllySwitchCooldown = 20.0f + random(21);
 }
 
 void GameLayer::gearButtonClick(GearType type)
@@ -717,18 +1043,18 @@ void GameLayer::onPause()
 		return;
 
 	_isPause = true;
-	RenderTexture *snapshoot = RenderTexture::create(winSize.width, winSize.height);
-	Scene *f = Director::sharedDirector()->getRunningScene();
-	Ref *pObject = f->getChildren()->objectAtIndex(0);
-	BGLayer *bg = (BGLayer *)pObject;
+	RenderTexture* snapshoot = RenderTexture::create(winSize.width, winSize.height);
+	Scene* f = Director::sharedDirector()->getRunningScene();
+	Ref* pObject = f->getChildren()->objectAtIndex(0);
+	BGLayer* bg = (BGLayer*)pObject;
 	snapshoot->begin();
 	bg->visit();
 
 	visit();
 	snapshoot->end();
 
-	Scene *pscene = Scene::create();
-	PauseLayer *layer = PauseLayer::create(snapshoot);
+	Scene* pscene = Scene::create();
+	PauseLayer* layer = PauseLayer::create(snapshoot);
 	pscene->addChild(layer);
 	Director::sharedDirector()->pushScene(pscene);
 }
@@ -759,18 +1085,18 @@ void GameLayer::onGear()
 		return;
 	_isGear = true;
 
-	RenderTexture *snapshoot = RenderTexture::create(winSize.width, winSize.height);
-	Scene *f = Director::sharedDirector()->getRunningScene();
-	Ref *pObject = f->getChildren()->objectAtIndex(0);
-	BGLayer *bg = (BGLayer *)pObject;
+	RenderTexture* snapshoot = RenderTexture::create(winSize.width, winSize.height);
+	Scene* f = Director::sharedDirector()->getRunningScene();
+	Ref* pObject = f->getChildren()->objectAtIndex(0);
+	BGLayer* bg = (BGLayer*)pObject;
 	snapshoot->begin();
 	bg->visit();
 
 	visit();
 	snapshoot->end();
 
-	Scene *pscene = Scene::create();
-	GearLayer *layer = GearLayer::create(snapshoot);
+	Scene* pscene = Scene::create();
+	GearLayer* layer = GearLayer::create(snapshoot);
 	_gearLayer = layer;
 	layer->updatePlayerGear();
 	pscene->addChild(layer);
@@ -792,10 +1118,10 @@ void GameLayer::onGameOver(bool isWin)
 		Director::sharedDirector()->popScene();
 	}
 
-	RenderTexture *snapshoot = RenderTexture::create(winSize.width, winSize.height);
-	Scene *f = Director::sharedDirector()->getRunningScene();
-	Ref *pObject = f->getChildren()->objectAtIndex(0);
-	BGLayer *bg = (BGLayer *)pObject;
+	RenderTexture* snapshoot = RenderTexture::create(winSize.width, winSize.height);
+	Scene* f = Director::sharedDirector()->getRunningScene();
+	Ref* pObject = f->getChildren()->objectAtIndex(0);
+	BGLayer* bg = (BGLayer*)pObject;
 	snapshoot->begin();
 	bg->visit();
 	visit();
@@ -803,8 +1129,8 @@ void GameLayer::onGameOver(bool isWin)
 
 	getGameModeHandler()->Internal_GameOver();
 
-	Scene *pscene = Scene::create();
-	GameOver *layer = GameOver::create(snapshoot);
+	Scene* pscene = Scene::create();
+	GameOver* layer = GameOver::create(snapshoot);
 	layer->setWin(isWin);
 	pscene->addChild(layer);
 	Director::sharedDirector()->pushScene(pscene);
@@ -814,38 +1140,80 @@ void GameLayer::onLeft()
 {
 	CCNotificationCenter::sharedNotificationCenter()->purgeNotificationCenter();
 
-	CCArray *childArray = getChildren();
-	Ref *pObject;
+	CCArray* childArray = getChildren();
+	Ref* pObject;
 	CCARRAY_FOREACH(childArray, pObject)
 	{
-		auto ac = (Node *)pObject;
+		auto ac = (Node*)pObject;
 		ac->unscheduleUpdate();
 		ac->unscheduleAllSelectors();
 	}
 
-	LoadLayer::unloadAllCharsIMG(_CharacterArray);
-	removeSprites(format("Unit/Tower/Tower{}.plist", mapId));
-
-	if (_isHardCoreGame)
+	// Deathmatch "next stage" quick restart launches straight into a new
+	// match that needs the exact same assets the next LoadLayer is about
+	// to preload again anyway -- skip unloading them instead of unloading
+	// then immediately reloading. This matters most for UI.plist/Map.plist
+	// specifically: those are only ever loaded from Lua (StartMenu.lua /
+	// SelectLayer.lua), and this shortcut never passes back through either
+	// of those screens to reload them.
+	if (!_quickRestartDeathmatch)
 	{
-		removeSprites(kGuardian_Han);
-		removeSprites(kGuardian_Roshi);
-		KTools::prepareFileOGG(GuardianEnum::Han, true);
-		KTools::prepareFileOGG(GuardianEnum::Roshi, true);
-	}
+		LoadLayer::unloadAllCharsIMG(_CharacterArray);
+		// AFTER
+		if (!isDuelMode())
+			removeSprites(format("Unit/Tower/Tower{}.plist", mapId));
 
-	KTools::prepareFileOGG("Effect", true);
-	KTools::prepareFileOGG("Ougis", true);
+		if (_isHardCoreGame)
+		{
+			removeSprites(kGuardian_Han);
+			removeSprites(kGuardian_Roshi);
+			KTools::prepareFileOGG(GuardianEnum::Han, true);
+			KTools::prepareFileOGG(GuardianEnum::Roshi, true);
+		}
+
+		KTools::prepareFileOGG("Effect", true);
+		KTools::prepareFileOGG("Ougis", true);
+	}
 
 	_CharacterArray.clear();
 	_TowerArray.clear();
 	_KonohaFlogArray.clear();
 	_AkatsukiFlogArray.clear();
 
-	removeSprites("UI.plist");
-	removeSprites("Map.plist");
+	if (!_quickRestartDeathmatch)
+	{
+		removeSprites("UI.plist");
+		removeSprites("Map.plist");
+	}
 
 	SimpleAudioEngine::sharedEngine()->end();
+
+	if (_quickRestartDeathmatch)
+	{
+		_quickRestartDeathmatch = false;
+
+		// Same handoff SelectLayer::onGameStart() does, just fed from the
+		// retained character/roster instead of a fresh selection.
+		auto tempSelect = SelectLayer::create();
+		tempSelect->setSelectHero(_retainedPlayerChar.c_str());
+		if (_retainedAllyRoster.size() >= 1)
+			tempSelect->setCom1Select(_retainedAllyRoster[0].c_str());
+		if (_retainedAllyRoster.size() >= 2)
+			tempSelect->setCom2Select(_retainedAllyRoster[1].c_str());
+
+		auto handler = getGameModeHandler();
+		handler->selectLayer = tempSelect;
+		handler->init();
+		handler->onInitHeros();
+
+		auto loadScene = Scene::create();
+		auto loadLayer = LoadLayer::create();
+		loadLayer->preloadAudio();
+		loadScene->addChild(loadLayer);
+
+		Director::sharedDirector()->replaceScene(TransitionFade::create(1.0f, loadScene));
+		return;
+	}
 
 	lua_call_func(UiFlowKeys::kOnGameOver);
 }
@@ -883,17 +1251,17 @@ void GameLayer::checkBackgroundMusic(float dt)
 	}
 }
 
-void GameLayer::setOugis(CharacterBase *sender)
+void GameLayer::setOugis(CharacterBase* sender)
 {
 	if (!_hudLayer->ougisLayer)
 	{
 		ougisChar = sender;
 
-		CCArray *childArray = getChildren();
-		Ref *pObject;
+		CCArray* childArray = getChildren();
+		Ref* pObject;
 		CCARRAY_FOREACH(childArray, pObject)
 		{
-			auto object = (Node *)pObject;
+			auto object = (Node*)pObject;
 			object->pauseSchedulerAndActions();
 		}
 		pauseSchedulerAndActions();
@@ -917,11 +1285,11 @@ void GameLayer::setOugis(CharacterBase *sender)
 void GameLayer::removeOugis()
 {
 	ougisChar->setZOrder(-ougisChar->getPositionY());
-	CCArray *childArray = getChildren();
-	Ref *pObject;
+	CCArray* childArray = getChildren();
+	Ref* pObject;
 	CCARRAY_FOREACH(childArray, pObject)
 	{
-		auto object = (Node *)pObject;
+		auto object = (Node*)pObject;
 		object->resumeSchedulerAndActions();
 	}
 	resumeSchedulerAndActions();
@@ -973,25 +1341,25 @@ void GameLayer::invokeAllCallbacks()
 	isHUDInitialized = true;
 	if (callbackssList.size() > 0)
 	{
-		for (auto &callback : callbackssList)
+		for (auto& callback : callbackssList)
 			callback();
 		callbackssList.clear();
 	}
 }
 
-Vec2 GameLayer::getCustomSpawnPoint(HeroData &data)
+Vec2 GameLayer::getCustomSpawnPoint(HeroData& data)
 {
 	data.isInit = true;
 	return data.group == Group::Konoha ? Vec2(432, 80) : Vec2(2608, 80);
 }
 
-void GameLayer::clearAllFlogsMainTarget(CharacterBase *target)
+void GameLayer::clearAllFlogsMainTarget(CharacterBase* target)
 {
 	UnitEx::clearMainTarget(target, _KonohaFlogArray);
 	UnitEx::clearMainTarget(target, _AkatsukiFlogArray);
 }
 
-void GameLayer::clearAllUnitsMainTarget(CharacterBase *target)
+void GameLayer::clearAllUnitsMainTarget(CharacterBase* target)
 {
 	clearAllFlogsMainTarget(target);
 	UnitEx::clearMainTarget(target, _AkatsukiFlogArray);
@@ -1091,7 +1459,7 @@ bool GameLayer::checkHasAnyMovement()
 }
 
 /** NOTE: Impl key listener */
-void GameLayer::keyEventHandle(GLFWwindow *window, int key, int scancode, int keyState, int mods)
+void GameLayer::keyEventHandle(GLFWwindow* window, int key, int scancode, int keyState, int mods)
 {
 	// NOTE: only attack button can hold
 	//  Other keys is only click
@@ -1137,9 +1505,18 @@ void GameLayer::keyEventHandle(GLFWwindow *window, int key, int scancode, int ke
 		if (keyState)
 			_gLayer->_hudLayer->skill2Button->click();
 		break;
+		// AFTER
 	case KEY_O: // skill 3
 		if (keyState)
 			_gLayer->_hudLayer->skill3Button->click();
+		break;
+	case KEY_T: // swap to ally slot 1
+		if (keyState && _gLayer->_hudLayer->allySwitch1Button)
+			_gLayer->_hudLayer->allySwitch1Button->click();
+		break;
+	case KEY_Y: // swap to ally slot 2
+		if (keyState && _gLayer->_hudLayer->allySwitch2Button)
+			_gLayer->_hudLayer->allySwitch2Button->click();
 		break;
 		// Gear buttons
 	case KEY_1:
@@ -1172,8 +1549,8 @@ void GameLayer::keyEventHandle(GLFWwindow *window, int key, int scancode, int ke
 	case KEY_0:
 	case KEY_KP_0:
 		break;
-	/* Item buttons */
-	// Item 1 & Purchase
+		/* Item buttons */
+		// Item 1 & Purchase
 	case KEY_B:
 		if (keyState)
 		{
@@ -1183,12 +1560,12 @@ void GameLayer::keyEventHandle(GLFWwindow *window, int key, int scancode, int ke
 				_gLayer->_hudLayer->getItem3Button()->click();
 		}
 		break;
-	// Item 2
+		// Item 2
 	case KEY_N:
 		if (keyState)
 			_gLayer->_hudLayer->getItem4Button()->click();
 		break;
-	// Item 3
+		// Item 3
 	case KEY_M:
 		if (keyState)
 			_gLayer->_hudLayer->getItem2Button()->click();
@@ -1378,12 +1755,20 @@ void GameLayer::keyEventHandle(int key, int keyState)
 		if (keyState)
 			_gLayer->_hudLayer->skill3Button->click();
 		break;
+	case KEY_T:
+		if (keyState && _gLayer->_hudLayer->allySwitch1Button)
+			_gLayer->_hudLayer->allySwitch1Button->click();
+		break;
+	case KEY_Y:
+		if (keyState && _gLayer->_hudLayer->allySwitch2Button)
+			_gLayer->_hudLayer->allySwitch2Button->click();
+		break;
 	case KEY_1: case KEY_KP_1:
-		if (_gLayer->_isGear && keyState) { auto &gb = _gLayer->_gearLayer->_screwLayer->getGearBtnArray(); if (gb.size()>=1 && gb.at(0)) gb.at(0)->click(); } break;
+		if (_gLayer->_isGear && keyState) { auto& gb = _gLayer->_gearLayer->_screwLayer->getGearBtnArray(); if (gb.size() >= 1 && gb.at(0)) gb.at(0)->click(); } break;
 	case KEY_2: case KEY_KP_2:
-		if (_gLayer->_isGear && keyState) { auto &gb = _gLayer->_gearLayer->_screwLayer->getGearBtnArray(); if (gb.size()>=2 && gb.at(1)) gb.at(1)->click(); } break;
+		if (_gLayer->_isGear && keyState) { auto& gb = _gLayer->_gearLayer->_screwLayer->getGearBtnArray(); if (gb.size() >= 2 && gb.at(1)) gb.at(1)->click(); } break;
 	case KEY_3: case KEY_KP_3:
-		if (_gLayer->_isGear && keyState) { auto &gb = _gLayer->_gearLayer->_screwLayer->getGearBtnArray(); if (gb.size()>=3 && gb.at(2)) gb.at(2)->click(); } break;
+		if (_gLayer->_isGear && keyState) { auto& gb = _gLayer->_gearLayer->_screwLayer->getGearBtnArray(); if (gb.size() >= 3 && gb.at(2)) gb.at(2)->click(); } break;
 	case KEY_B:
 		if (keyState) { if (_gLayer->_isGear) _gLayer->_gearLayer->confirmPurchase(); else _gLayer->_hudLayer->getItem3Button()->click(); } break;
 	case KEY_N:

@@ -17,24 +17,24 @@ bool LoadLayer::init()
 		return false;
 
 	// produce the menu_bar
-	Sprite *menu_bar_b = Sprite::create("menu_bar2.png");
+	Sprite* menu_bar_b = Sprite::create("menu_bar2.png");
 	menu_bar_b->setAnchorPoint(Vec2(0, 0));
 	FULL_SCREEN_SPRITE(menu_bar_b);
 	addChild(menu_bar_b, 2);
 
-	Sprite *menu_bar_t = Sprite::create("menu_bar3.png");
+	Sprite* menu_bar_t = Sprite::create("menu_bar3.png");
 	menu_bar_t->setAnchorPoint(Vec2(0, 0));
 	menu_bar_t->setPosition(Vec2(0, winSize.height - menu_bar_t->getContentSize().height));
 	FULL_SCREEN_SPRITE(menu_bar_t);
 	addChild(menu_bar_t, 2);
 
-	Sprite *loading_title = Sprite::createWithSpriteFrameName("loading_title.png");
+	Sprite* loading_title = Sprite::createWithSpriteFrameName("loading_title.png");
 	loading_title->setAnchorPoint(Vec2(0, 0));
 	loading_title->setPosition(Vec2(2, winSize.height - loading_title->getContentSize().height - 2));
 	addChild(loading_title, 3);
 
 	// produce the cloud
-	Sprite *cloud_left = Sprite::createWithSpriteFrameName("cloud.png");
+	Sprite* cloud_left = Sprite::createWithSpriteFrameName("cloud.png");
 	cloud_left->setPosition(Vec2(0, 15));
 	cloud_left->setFlipX(true);
 	cloud_left->setFlipY(true);
@@ -45,9 +45,9 @@ bool LoadLayer::init()
 	auto cseq1 = RepeatForever::create(newSequence(cmv1, cmv1->reverse()));
 	cloud_left->runAction(cseq1);
 
-	Sprite *cloud_right = Sprite::createWithSpriteFrameName("cloud.png");
+	Sprite* cloud_right = Sprite::createWithSpriteFrameName("cloud.png");
 	cloud_right->setPosition(Vec2(winSize.width - cloud_right->getContentSize().width,
-								  winSize.height - (cloud_right->getContentSize().height + 15)));
+		winSize.height - (cloud_right->getContentSize().height + 15)));
 	cloud_right->setAnchorPoint(Vec2(0, 0));
 	addChild(cloud_right, 1);
 
@@ -55,7 +55,7 @@ bool LoadLayer::init()
 	auto cseq2 = RepeatForever::create(newSequence(cmv2, cmv2->reverse()));
 	cloud_right->runAction(cseq2);
 
-	const auto &gd = getGameModeHandler()->getGameData();
+	const auto& gd = getGameModeHandler()->getGameData();
 	_enableGear = gd.enableGear;
 	_isHardCoreMode = gd.isHardCore;
 
@@ -78,7 +78,7 @@ void LoadLayer::preloadIMG()
 		count = 4;
 
 	int i = 0;
-	for (const auto &data : herosDataVector)
+	for (const auto& data : herosDataVector)
 	{
 		auto name = data.name;
 		if (std::find(loadVector.begin(), loadVector.end(), name) == loadVector.end())
@@ -90,6 +90,17 @@ void LoadLayer::preloadIMG()
 		if (i == 0 || (i < count && _enableGear))
 			setLoadingAnimation(name.c_str(), i);
 		i++;
+	}
+
+	// Preload benched characters too (e.g. Duel mode's swap-in allies)
+// so mid-fight swaps don't stutter on first use.
+	for (const auto& name : getGameModeHandler()->getExtraPreloadChars())
+	{
+		if (std::find(loadVector.begin(), loadVector.end(), name) == loadVector.end())
+		{
+			perloadCharIMG(name.c_str());
+			loadVector.push_back(name);
+		}
 	}
 
 	if (_isHardCoreMode)
@@ -113,11 +124,11 @@ void LoadLayer::preloadIMG()
 
 	setRand();
 	int num = rand() % 3 + 1;
-	Sprite *tips = Sprite::createWithSpriteFrameName(format("tip{}.png", num).c_str());
+	Sprite* tips = Sprite::createWithSpriteFrameName(format("tip{}.png", num).c_str());
 	tips->setPosition(Vec2(winSize.width / 2, winSize.height / 2));
 	addChild(tips);
 
-	Sprite *loading = Sprite::createWithSpriteFrameName("loading_font.png");
+	Sprite* loading = Sprite::createWithSpriteFrameName("loading_font.png");
 	loading->setPosition(Vec2(winSize.width - 120, 45));
 	auto fade = FadeOut::create(1.0f);
 	auto fadeseq = RepeatForever::create(newSequence(fade, fade->reverse()));
@@ -128,7 +139,7 @@ void LoadLayer::preloadIMG()
 	scheduleOnce(schedule_selector(LoadLayer::onLoadFinish), 3.0f);
 }
 
-void LoadLayer::perloadCharIMG(const string &name)
+void LoadLayer::perloadCharIMG(const string& name)
 {
 	Texture2D::PVRImagesHavePremultipliedAlpha(true);
 
@@ -209,7 +220,7 @@ void LoadLayer::perloadCharIMG(const string &name)
 	}
 }
 
-void LoadLayer::unloadCharIMG(CharacterBase *c)
+void LoadLayer::unloadCharIMG(CharacterBase* c)
 {
 	if (c == nullptr || c->isClone() || c->isSummon())
 	{
@@ -217,7 +228,15 @@ void LoadLayer::unloadCharIMG(CharacterBase *c)
 	}
 
 	auto name = c->getName();
-	auto path = format("Unit/Ninja/{}/{}.plist", name, name);
+
+	string path;
+	if (c->isGuardian())
+		path = format("Unit/Guardian/{}/{}.plist", name, name);
+	else if (c->isKugutsu())
+		path = format("Unit/Kugutsu/{}/{}.plist", name, name);
+	else
+		path = format("Unit/Ninja/{}/{}.plist", name, name);
+
 	removeSprites(path);
 
 	if (c->isPlayerOrCom())
@@ -280,7 +299,7 @@ void LoadLayer::unloadCharIMG(CharacterBase *c)
 	}
 }
 
-void LoadLayer::unloadAllCharsIMG(const vector<Hero *> &players)
+void LoadLayer::unloadAllCharsIMG(const vector<Hero*>& players)
 {
 	vector<string> unloadVector(players.size());
 	for (auto player : players)
@@ -294,7 +313,7 @@ void LoadLayer::unloadAllCharsIMG(const vector<Hero *> &players)
 	}
 }
 
-void LoadLayer::setLoadingAnimation(const char *player, int index)
+void LoadLayer::setLoadingAnimation(const char* player, int index)
 {
 	auto loadingAvator = Sprite::createWithSpriteFrameName(format("{}_Walk_01", player).c_str());
 	loadingAvator->setFlipX(true);
@@ -303,7 +322,7 @@ void LoadLayer::setLoadingAnimation(const char *player, int index)
 
 	// FIXME: Use the other way get animation frame count
 	ssize_t frameCount = is_same(player, HeroEnum::Konan) ? 1 : 7;
-	Vector<SpriteFrame *> animeFrames(frameCount);
+	Vector<SpriteFrame*> animeFrames(frameCount);
 	for (int i = 1; i < frameCount; i++)
 	{
 		auto frame = getSpriteFrame("{}_Walk_{:02d}", player, i);
@@ -326,7 +345,7 @@ void LoadLayer::playBGM(float dt)
 void LoadLayer::preloadAudio()
 {
 	auto bg_src = _enableGear ? "blue_bg.png" : "red_bg.png";
-	Sprite *bgSprite = Sprite::create(bg_src);
+	Sprite* bgSprite = Sprite::create(bg_src);
 
 	FULL_SCREEN_SPRITE(bgSprite);
 	bgSprite->setAnchorPoint(Vec2(0, 0));
@@ -338,7 +357,7 @@ void LoadLayer::preloadAudio()
 
 void LoadLayer::onLoadFinish(float dt)
 {
-	Scene *gameScene = Scene::create();
+	Scene* gameScene = Scene::create();
 
 	_hudLayer = HudLayer::create();
 

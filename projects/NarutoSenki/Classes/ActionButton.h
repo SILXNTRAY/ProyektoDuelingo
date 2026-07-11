@@ -48,7 +48,7 @@ public:
 	PROP(bool, _isDoubleSkill, DoubleSkill);
 	PROP_UInt(_timeCount, TimeCount);
 
-	void setLock();
+	void setLock(bool showX = false);
 	void unLock();
 	void clearOugisMark();
 	void setGearType(GearType type);

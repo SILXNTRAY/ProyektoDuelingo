@@ -524,6 +524,8 @@ void HPBar::loseHP(float percent)
 
 		if (_delegate->isPlayer())
 			getGameLayer()->setHPLose(percent);
+		else if (_delegate->isCom() && !getGameLayer()->_enableGear)
+			getGameLayer()->setEnemyHPLose(percent);
 	}
 }
 

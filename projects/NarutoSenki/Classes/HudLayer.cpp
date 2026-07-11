@@ -1,5 +1,6 @@
 #include "Core/Hero.hpp"
 #include "GameLayer.h"
+#include "GameMode/GameModeImpl.h"
 #include "HudLayer.h"
 #include "MyUtils/CCShake.h"
 
@@ -100,6 +101,7 @@ HudLayer::HudLayer()
 	AkaLabel = nullptr;
 	gameClock = nullptr;
 	pauseNenu = nullptr;
+
 	texUI = nullptr;
 	uiBatch = nullptr;
 	miniLayer = nullptr;
@@ -187,6 +189,95 @@ void HudLayer::initGearButton(const string &charName)
 	addChild(gearMenu, 100);
 }
 
+void HudLayer::refreshSkillIcons(const string& charName)
+{
+	auto f1 = getSpriteFrame("{}_skill1.png", charName);
+	auto f2 = getSpriteFrame("{}_skill2.png", charName);
+	auto f3 = getSpriteFrame("{}_skill3.png", charName);
+	auto f4 = getSpriteFrame("{}_skill4.png", charName);
+	auto f5 = getSpriteFrame("{}_skill5.png", charName);
+
+	if (f1 && skill1Button) skill1Button->setDisplayFrame(f1);
+	if (f2 && skill2Button) skill2Button->setDisplayFrame(f2);
+	if (f3 && skill3Button) skill3Button->setDisplayFrame(f3);
+	if (f4 && skill4Button) skill4Button->setDisplayFrame(f4);
+	if (f5 && skill5Button) skill5Button->setDisplayFrame(f5);
+}
+
+void HudLayer::refreshEnemyAvatar(const string& charName)
+{
+	if (!enemy_gearMenu)
+		return;
+
+	auto frame = getSpriteFrame("{}_avator.png", charName);
+	if (!frame)
+	{
+		CCLOGERROR("Not found %s avator sprite", charName.c_str());
+		return;
+	}
+
+	enemy_gearMenu->removeFromParent();
+
+	auto enemyAvatarSprite = Sprite::createWithSpriteFrame(frame);
+	enemyAvatarSprite->setFlipX(true);
+	auto enemyAvatarItem = MenuItemSprite::create(enemyAvatarSprite, nullptr);
+	enemy_gearMenu = Menu::create(enemyAvatarItem, nullptr);
+	enemy_gearMenu->setAnchorPoint(Vec2(1, 0));
+	float avatarW = enemyAvatarSprite->getContentSize().width;
+	float avatarH = enemyAvatarSprite->getContentSize().height;
+	enemy_gearMenu->setPosition(Vec2(winSize.width - avatarW / 2, winSize.height - avatarH / 2));
+	addChild(enemy_gearMenu, 100);
+}
+
+// AFTER
+void HudLayer::updateAllySwitchButtons(float dt)
+{
+	if (!_allySwitchTouchPriorityFixed)
+	{
+		_allySwitchTouchPriorityFixed = true;
+		auto dispatcher = Director::sharedDirector()->getTouchDispatcher();
+		if (allySwitch1Button)
+		{
+			dispatcher->removeDelegate(allySwitch1Button);
+			dispatcher->addTargetedDelegate(allySwitch1Button, -60, true);
+		}
+		if (allySwitch2Button)
+		{
+			dispatcher->removeDelegate(allySwitch2Button);
+			dispatcher->addTargetedDelegate(allySwitch2Button, -60, true);
+		}
+	}
+
+	auto player = getGameLayer()->currentPlayer;
+	if (!player)
+		return;
+
+	bool blocked = false;
+	State s = player->getState();
+	if (s == State::NATTACK || s == State::SATTACK || s == State::OATTACK || s == State::O2ATTACK)
+		blocked = true;
+	if (player->_skillChangeBuffValue != 0)
+		blocked = true;
+
+	ActionButton* buttons[2] = { allySwitch1Button, allySwitch2Button };
+	for (auto btn : buttons)
+	{
+		if (!btn)
+			continue;
+
+		if (blocked)
+		{
+			if (btn->getTimeCount() == 0 && !btn->_isLock)
+				btn->setLock(true);
+		}
+		else
+		{
+			if (btn->_isLock)
+				btn->unLock();
+		}
+	}
+}
+
 void HudLayer::playGameOpeningAnimation()
 {
 	Vector<SpriteFrame *> spriteFrames;
@@ -247,13 +338,24 @@ void HudLayer::initHeroInterface()
 	status_expbar->setReverseDirection(true);
 	status_expbar->setPosition(Vec2(54, winHeight - 54));
 	addChild(status_expbar, 50);
-	MenuItem *menu_button = MenuItemSprite::create(Sprite::createWithSpriteFrameName("minimap_bg.png"), nullptr, nullptr, this, menu_selector(HudLayer::pauseButtonClick));
-	menu_button->setAnchorPoint(Vec2(1, 1));
-	pauseNenu = Menu::create(menu_button, nullptr);
-	pauseNenu->setPosition(Vec2(winWidth, winHeight));
-	addChild(pauseNenu);
+	MenuItem* menu_button = MenuItemSprite::create(Sprite::createWithSpriteFrameName("minimap_bg.png"), nullptr, nullptr, this, menu_selector(HudLayer::pauseButtonClick));
 
-	Sprite *killIcon = Sprite::createWithSpriteFrameName("kill_icon.png");
+	if (isDuelMode())
+	{
+		menu_button->setAnchorPoint(Vec2(0.5f, 1));
+		pauseNenu = Menu::create(menu_button, nullptr);
+		pauseNenu->setPosition(Vec2(winWidth / 2.0f, winHeight));
+		addChild(pauseNenu);
+	}
+	else
+	{
+		menu_button->setAnchorPoint(Vec2(1, 1));
+		pauseNenu = Menu::create(menu_button, nullptr);
+		pauseNenu->setPosition(Vec2(winWidth, winHeight));
+		addChild(pauseNenu);
+	}
+
+	Sprite* killIcon = Sprite::createWithSpriteFrameName("kill_icon.png");
 	killIcon->setAnchorPoint(Vec2(0, 1));
 	killIcon->setPosition(Vec2(winWidth - 114, winHeight - 46));
 	addChild(killIcon, 5000);
@@ -264,7 +366,7 @@ void HudLayer::initHeroInterface()
 	killLabel->setPosition(Vec2(killIcon->getPositionX() + killIcon->getContentSize().width / 2 + 5, winHeight - 56));
 	addChild(killLabel, 5001);
 
-	Sprite *deadIcon = Sprite::createWithSpriteFrameName("dead_icon.png");
+	Sprite* deadIcon = Sprite::createWithSpriteFrameName("dead_icon.png");
 	deadIcon->setAnchorPoint(Vec2(0, 1));
 	deadIcon->setPosition(Vec2(winWidth - 114 + 26, winHeight - 47));
 	addChild(deadIcon, 5000);
@@ -480,8 +582,8 @@ void HudLayer::initHeroInterface()
 
 	for (auto tower : getGameLayer()->_TowerArray)
 	{
-		const char *path = "";
-		MiniIcon *mi;
+		const char* path = "";
+		MiniIcon* mi;
 		if (tower->getGroup() == currentPlayer->getGroup())
 			path = "tower_icon1.png";
 		else
@@ -499,8 +601,8 @@ void HudLayer::initHeroInterface()
 	{
 		if (player->isPlayerOrCom())
 		{
-			MiniIcon *mi;
-			const char *path = "";
+			MiniIcon* mi;
+			const char* path = "";
 			if (player->isPlayer())
 			{
 				path = "player_icon.png";
@@ -533,11 +635,176 @@ void HudLayer::initHeroInterface()
 	}
 
 	addChild(miniLayer, 500);
+
+	if (isDuelMode())
+	{
+		killIcon->setVisible(false);
+		deadIcon->setVisible(false);
+		killLabel->setVisible(false);
+		deadLabel->setVisible(false);
+		KonoLabel->setVisible(false);
+		AkaLabel->setVisible(false);
+		hengLabel->setVisible(false);
+		item1Button->setVisible(false);
+
+		auto& roster = getGameLayer()->_allyRoster;
+		// AFTER
+		if (roster.size() >= 1)
+		{
+			allySwitch1Button = ActionButton::create((roster[0] + "_rp.png").c_str());
+			allySwitch1Button->setPosition(Vec2(0, winSize.height - 92));
+			allySwitch1Button->setDelegate(this);
+			allySwitch1Button->setCD(15000);
+			allySwitch1Button->setABType(AllySwitch1);
+			allySwitch1Button->setMarkSprite("skill_freeze.png");
+			addChild(allySwitch1Button, 200);
+		}
+		if (roster.size() >= 2)
+		{
+			allySwitch2Button = ActionButton::create((roster[1] + "_rp.png").c_str());
+			allySwitch2Button->setPosition(Vec2(70, winSize.height - 92));
+			allySwitch2Button->setDelegate(this);
+			allySwitch2Button->setCD(15000);
+			allySwitch2Button->setABType(AllySwitch2);
+			allySwitch2Button->setMarkSprite("skill_freeze.png");
+			addChild(allySwitch2Button, 200);
+		}
+		schedule(schedule_selector(HudLayer::updateAllySwitchButtons), 0.1f);
+
+		miniLayer->setVisible(false);
+
+		CharacterBase* enemy = nullptr;
+		for (auto hero : getGameLayer()->_CharacterArray)
+		{
+			if (hero->isCom())
+			{
+				enemy = hero;
+				break;
+			}
+		}
+
+		if (enemy)
+		{
+			auto enemyName = enemy->getName();
+
+			enemy_status_bar = Sprite::createWithSpriteFrameName("status_bar_bg.png");
+			enemy_status_bar->setFlipX(true);
+			enemy_status_bar->setAnchorPoint(Vec2(1, 0));
+			enemy_status_bar->setPosition(Vec2(winWidth, winHeight - enemy_status_bar->getContentSize().height));
+			uiBatch->addChild(enemy_status_bar);
+
+			enemy_status_hpbar = Sprite::createWithSpriteFrameName("status_hpbar2.png");
+			enemy_status_hpbar->setFlipX(true);
+			enemy_status_hpbar->setPosition(Vec2(winWidth - 53, winHeight - 54));
+			addChild(enemy_status_hpbar, 40);
+
+			enemy_status_hpMark = Sprite::createWithSpriteFrameName("status_hpMark.png");
+			enemy_status_hpMark->setFlipX(true);
+			enemy_status_hpMark->setAnchorPoint(Vec2(1, 0));
+			enemy_status_hpMark->setPosition(Vec2(winWidth - 54, winHeight - 105));
+			addChild(enemy_status_hpMark, 45);
+
+			// Mirrored gear icons — cosmetic only, gear is disabled in Duel mode.
+			enemy_gear1 = Sprite::createWithSpriteFrameName("gearbg.png");
+			enemy_gear1->setFlipX(true);
+			enemy_gear1->setAnchorPoint(Vec2(1, 0));
+			enemy_gear1->setPosition(Vec2(winWidth, winSize.height - 92));
+			addChild(enemy_gear1, 200);
+
+			enemy_gear2 = Sprite::createWithSpriteFrameName("gearbg.png");
+			enemy_gear2->setFlipX(true);
+			enemy_gear2->setAnchorPoint(Vec2(1, 0));
+			enemy_gear2->setPosition(Vec2(winWidth - 35, winSize.height - 112));
+			addChild(enemy_gear2, 200);
+
+			enemy_gear3 = Sprite::createWithSpriteFrameName("gearbg.png");
+			enemy_gear3->setFlipX(true);
+			enemy_gear3->setAnchorPoint(Vec2(1, 0));
+			enemy_gear3->setPosition(Vec2(winWidth - 70, winSize.height - 92));
+			addChild(enemy_gear3, 200);
+
+			// Enemy ally bench icons — drawn on top of the cosmetic gear
+			// backgrounds above, same slots the player's allySwitch1/2Button
+			// occupy on the mirrored side.
+			auto& enemyRoster = getGameLayer()->_enemyAllyRoster;
+			if (enemyRoster.size() >= 1)
+			{
+				enemyAllyIcon1 = Sprite::createWithSpriteFrameName((enemyRoster[0] + "_rp.png").c_str());
+				enemyAllyIcon1->setFlipX(true);
+				enemyAllyIcon1->setAnchorPoint(Vec2(1, 0));
+				enemyAllyIcon1->setPosition(Vec2(winWidth, winSize.height - 92));
+				addChild(enemyAllyIcon1, 200);
+			}
+			if (enemyRoster.size() >= 2)
+			{
+				enemyAllyIcon2 = Sprite::createWithSpriteFrameName((enemyRoster[1] + "_rp.png").c_str());
+				enemyAllyIcon2->setFlipX(true);
+				enemyAllyIcon2->setAnchorPoint(Vec2(1, 0));
+				enemyAllyIcon2->setPosition(Vec2(winWidth - 70, winSize.height - 92));
+				addChild(enemyAllyIcon2, 200);
+			}
+
+			Sprite* enemyExpSprite = Sprite::createWithSpriteFrameName("status_ckrbar.png");
+			enemy_status_expbar = ProgressTimer::create(enemyExpSprite);
+			enemy_status_expbar->setType(kCCProgressTimerTypeRadial);
+			enemy_status_expbar->setPercentage(100);
+			enemy_status_expbar->setReverseDirection(true);
+			enemy_status_expbar->setPosition(Vec2(winWidth - 54, winHeight - 54));
+			enemy_status_expbar->setScaleX(-1);
+			addChild(enemy_status_expbar, 50);
+
+			auto enemyAvatarFrame = getSpriteFrame("{}_avator.png", enemyName);
+			if (enemyAvatarFrame)
+			{
+				auto enemyAvatarSprite = Sprite::createWithSpriteFrame(enemyAvatarFrame);
+				enemyAvatarSprite->setFlipX(true);
+				auto enemyAvatarItem = MenuItemSprite::create(enemyAvatarSprite, nullptr);
+				enemy_gearMenu = Menu::create(enemyAvatarItem, nullptr);
+				enemy_gearMenu->setAnchorPoint(Vec2(1, 0));
+				float avatarW = enemyAvatarSprite->getContentSize().width;
+				float avatarH = enemyAvatarSprite->getContentSize().height;
+				enemy_gearMenu->setPosition(Vec2(winWidth - avatarW / 2, winHeight - avatarH / 2));
+				addChild(enemy_gearMenu, 100);
+			}
+			enemy_hpLabel = CCLabelBMFont::create(enemy->getHP_Value().asString().c_str(), Fonts::Default);
+			enemy_hpLabel->setScale(0.35f);
+			enemy_hpLabel->setPosition(Vec2(winWidth, winHeight - 54));
+			enemy_hpLabel->setAnchorPoint(Vec2(1, 0));
+			addChild(enemy_hpLabel, 5000);
+		}
+	}
+
 	// Call after all addChild functions
 	// thats can make ActionButton::setLock -> setMask work
 	updateSpecialSkillButtons();
 
 	_isInitPlayerHud = true;
+}
+
+void HudLayer::setEnemyHPLose(float percent)
+{
+	if (!enemy_status_hpbar)
+		return;
+	RotateTo* ra = RotateTo::create(0.2f, ((1 - percent) * 180), ((1 - percent) * 180));
+	enemy_status_hpbar->runAction(ra);
+	if (enemy_hpLabel)
+	{
+		uint32_t hp = 0;
+		for (auto hero : getGameLayer()->_CharacterArray)
+		{
+			if (hero->isCom())
+			{
+				hp = hero->getHP();
+				break;
+			}
+		}
+		enemy_hpLabel->setString(to_cstr(hp));
+	}
+}
+
+bool HudLayer::isDuelMode()
+{
+	return ::isDuelMode();
 }
 
 void HudLayer::addMapIcon()
@@ -692,8 +959,6 @@ void HudLayer::setEXPLose()
 	if (Percent > 100)
 		Percent = 100;
 
-	// RotateTo* ra=RotateTo::create(0.2f,((1-Percent/100)*90),((1-Percent/100)*90));
-	// status_expbar->runAction(ra);
 	status_expbar->setPercentage((1 + Percent / 100) * 50);
 
 	if (exp >= 2500)
@@ -705,6 +970,8 @@ void HudLayer::setEXPLose()
 	{
 		expLabel->setString(format("{}%", (int)Percent).c_str());
 	}
+
+	// In duel mode, also update enemy EXP bar
 }
 
 void HudLayer::setTowerState(int charId)

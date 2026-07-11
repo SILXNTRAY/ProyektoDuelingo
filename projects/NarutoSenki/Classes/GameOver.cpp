@@ -2,6 +2,7 @@
 #include "GameLayer.h"
 #include "Core/Hero.hpp"
 #include "GameMode/GameModeImpl.h"
+#include "MyUtils/KTools.h"
 
 GameOver::GameOver()
 {
@@ -11,9 +12,20 @@ GameOver::GameOver()
 
 GameOver::~GameOver()
 {
-	AnimationCache::purgeSharedAnimationCache();
-	SpriteFrameCache::sharedSpriteFrameCache()->removeUnusedSpriteFrames();
-	TextureCache::sharedTextureCache()->removeUnusedTextures();
+	// Deathmatch quick restart skips the Lua-driven StartMenu/SelectLayer
+	// detour that normally reloads UI.plist/Map.plist right after this
+	// purge runs. Frames like loading_title.png/cloud.png/menu_bar*.png
+	// are only ever referenced by LoadLayer itself, so by the time a
+	// match's GameOver screen shows they're sitting at refcount 1 and
+	// this purge would strip them right out from under the very next
+	// LoadLayer, with nothing left to reload them first.
+	auto layer = getGameLayer();
+	if (!layer || !layer->_quickRestartDeathmatch)
+	{
+		AnimationCache::purgeSharedAnimationCache();
+		SpriteFrameCache::sharedSpriteFrameCache()->removeUnusedSpriteFrames();
+		TextureCache::sharedTextureCache()->removeUnusedTextures();
+	}
 }
 
 bool GameOver::init(RenderTexture *snapshoot)
@@ -144,7 +156,7 @@ void GameOver::listResult()
 			resultScore = ((killDead - ((_totalSecond / 60.0f - 10) * 4)) / 40) * 100;
 	}
 
-	if (_totalSecond < 1 * 60 + 5 && _isWin)
+	if(_totalSecond < 1 * 60 + 5 && _isWin && !isDuelMode())
 	{
 		SimpleAudioEngine::sharedEngine()->stopBackgroundMusic(true);
 		Director::sharedDirector()->end();
@@ -374,7 +386,7 @@ void GameOver::listResult()
 		}
 		if (Cheats < kMaxCheats)
 		{
-			resultChar = currPlayer->getName().c_str();
+			resultChar = currPlayer->getName();
 			if (currPlayer->getName() == HeroEnum::SageNaruto)
 				resultChar = HeroEnum::Naruto;
 			else if (currPlayer->getName() == HeroEnum::RikudoNaruto)
@@ -390,7 +402,7 @@ void GameOver::listResult()
 
 			if (_isWin)
 			{
-				int winNum = KTools::readWinNumFromSQL(resultChar);
+				int winNum = KTools::readWinNumFromSQL(resultChar.c_str());
 				if (resultScore >= 140)
 					winNum += 3;
 				else if (resultScore >= 120)
@@ -399,7 +411,7 @@ void GameOver::listResult()
 					winNum += 1;
 
 				auto realWin = std::to_string(winNum);
-				KTools::saveSQLite("CharRecord", "name", resultChar, "column1", realWin, false);
+				KTools::saveSQLite("CharRecord", "name", resultChar.c_str(), "column1", realWin, false);
 
 				if (getGameLayer()->_isRandomChar && resultScore >= 120)
 				{
@@ -440,24 +452,27 @@ void GameOver::listResult()
 					}
 				}
 
-				auto bestTime = KTools::readSQLite("CharRecord", "name", resultChar, "column3");
-				if (bestTime.empty())
+				auto bestTime = KTools::readSQLite("CharRecord", "name", resultChar.c_str(), "column3");
+				if (!isDuelMode())
 				{
-					KTools::saveSQLite("CharRecord", "name", resultChar, "column3", tempTime, false);
-				}
-				else
-				{
-					int recordHour = to_int(bestTime.substr(0, 2).c_str());
-					int recordMinute = to_int(bestTime.substr(3, 2).c_str());
-					int recordSecond = to_int(bestTime.substr(6, 2).c_str());
-
-					int recordTime = recordHour * 60 * 60 + recordMinute * 60 + recordSecond;
-					int currentTime = getGameLayer()->_minute * 60 + getGameLayer()->_second;
-					bool isNewRecord = currentTime < recordTime;
-
-					if (isNewRecord)
+					if (bestTime.empty())
 					{
-						KTools::saveSQLite("CharRecord", "name", resultChar, "column3", tempTime, false);
+						KTools::saveSQLite("CharRecord", "name", resultChar.c_str(), "column3", tempTime, false);
+					}
+					else
+					{
+						int recordHour = to_int(bestTime.substr(0, 2).c_str());
+						int recordMinute = to_int(bestTime.substr(3, 2).c_str());
+						int recordSecond = to_int(bestTime.substr(6, 2).c_str());
+
+						int recordTime = recordHour * 60 * 60 + recordMinute * 60 + recordSecond;
+						int currentTime = getGameLayer()->_minute * 60 + getGameLayer()->_second;
+						bool isNewRecord = currentTime < recordTime;
+
+						if (isNewRecord)
+						{
+							KTools::saveSQLite("CharRecord", "name", resultChar.c_str(), "column3", tempTime, false);
+						}
 					}
 				}
 			}
@@ -475,6 +490,15 @@ void GameOver::listResult()
 	overMenu->setPosition(Vec2(winSize.width / 2 + result_bg->getContentSize().width / 2 - 12, winSize.height / 2 + result_bg->getContentSize().height / 2 - 18));
 	addChild(overMenu, 7);
 
+	if (getGameMode() == GameMode::Deathmatch)
+	{
+		start_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("start_btn.png"), Sprite::createWithSpriteFrameName("start_btn.png"), nullptr, this, menu_selector(GameOver::onStartNextStage));
+		Menu *startMenu = Menu::create(start_btn, nullptr);
+		startMenu->setAnchorPoint(Vec2(1, 0));
+		startMenu->setPosition(Vec2(winSize.width / 2 + result_bg->getContentSize().width / 2 - 12, winSize.height / 2 - result_bg->getContentSize().height / 2 + 12));
+		addChild(startMenu, 7);
+	}
+
 	getGameLayer()->_isSurrender = false;
 
 	getGameModeHandler()->onGameOver();
@@ -484,6 +508,47 @@ void GameOver::onUPloadBtn(Ref *sender)
 {
 	auto tip = CCTips::create("ServerMainten");
 	addChild(tip, 5000);
+}
+
+void GameOver::onStartNextStage(Ref *sender)
+{
+	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/confirm.ogg");
+
+	auto layer = getGameLayer();
+
+	// Read back the team as it was saved at the START of this match
+	// (ModeDeathmatch::onInitHeros() persists it there) rather than
+	// deriving it from currentPlayer/_allyRoster now -- those reflect
+	// live end-of-match state, which could be mid-transformation
+	// (SageNaruto, ImmortalSasuke, etc.) if the fight ended while
+	// transformed. The next stage should start from the same base pick
+	// the player actually chose, not whatever form they happened to be
+	// in when the match ended.
+	string savedPlayer, savedAlly1, savedAlly2;
+	if (KTools::readDeathmatchTeam(savedPlayer, savedAlly1, savedAlly2))
+	{
+		layer->_retainedPlayerChar = savedPlayer;
+		layer->_retainedAllyRoster.clear();
+		if (!savedAlly1.empty())
+			layer->_retainedAllyRoster.push_back(savedAlly1);
+		if (!savedAlly2.empty())
+			layer->_retainedAllyRoster.push_back(savedAlly2);
+	}
+	else
+	{
+		// Shouldn't happen (onInitHeros() always saves one), but fall back
+		// to live state rather than leaving it empty.
+		layer->_retainedPlayerChar = layer->currentPlayer->getName();
+		layer->_retainedAllyRoster = layer->_allyRoster;
+	}
+
+	layer->_quickRestartDeathmatch = true;
+
+	// Same teardown as the normal "back to menu" confirm (onLeft below) --
+	// GameLayer::onLeft() checks _quickRestartDeathmatch and launches
+	// straight into a new match instead of handing off to the menu.
+	layer->_isExiting = true;
+	Director::sharedDirector()->popScene();
 }
 
 void GameOver::onBackToMenu(Ref *sender)
