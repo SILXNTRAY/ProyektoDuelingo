@@ -110,6 +110,8 @@ public:
 	virtual void onCharacterInit(CharacterBase *c) = 0;
 	virtual void onCharacterDead(CharacterBase *c) = 0;
 	virtual void onCharacterReborn(CharacterBase *c) = 0;
+	virtual void onSurrender() {}
+	virtual vector<string> getExtraPreloadChars() { return {}; }
 
 	inline const GameData &getGameData() { return gd; }
 	inline int getOldCheats() { return oldCheats; }
@@ -155,6 +157,11 @@ protected:
 		this->flogSpawnDuration = (duration < 5 || duration > 60) ? 15.0f : duration;
 		this->isLimitFlog = maxWaves >= 0;
 		this->maxFlogWaves = maxWaves;
+	}
+
+	void setSkipFlogInit(bool skip)
+	{
+		this->skipInitFlogs = skip;
 	}
 
 	void setHero(bool enableReborn)
@@ -346,9 +353,14 @@ protected:
 		auto _begin = excepts.begin();
 		auto _end = excepts.end();
 		int idx;
+		// NOTE: setRand() reseeds via time(0), which only has 1-second
+		// resolution -- calling it on every loop iteration (as this used
+		// to) reseeds rand() to the identical state each pass, so idx never
+		// changes and the loop always falls through to defaultChar whenever
+		// that one idx happens to be excluded. Seed once before the loop.
+		setRand();
 		for (size_t i = 0; i < kHeroNum * 2; i++) // Max loops is kHeroNum * 2
 		{
-			setRand();
 			idx = random(kHeroNum);
 			if (std::find(_begin, _end, kHeroList[idx]) == _end)
 				return kHeroList[idx];

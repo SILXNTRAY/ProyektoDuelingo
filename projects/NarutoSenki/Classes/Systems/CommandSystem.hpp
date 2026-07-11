@@ -274,8 +274,7 @@ private:
 							   else
 								   hero->setDamage(thiz, "c_hit", 2000, false);
 
-							   if (hero->isPlayer())
-								   getGameLayer()->setHPLose(hero->getHpPercent());
+							   getGameLayer()->setHPLose(hero->getHpPercent());
 						   }
 					   }
 				   }
@@ -289,8 +288,7 @@ private:
 					   else
 						   thiz->setDamage(thiz, "c_hit", 2000, false);
 
-					   if (thiz->isPlayer())
-						   getGameLayer()->setHPLose(thiz->getHpPercent());
+					   getGameLayer()->setHPLose(thiz->getHpPercent());
 				   }
 			   }
 

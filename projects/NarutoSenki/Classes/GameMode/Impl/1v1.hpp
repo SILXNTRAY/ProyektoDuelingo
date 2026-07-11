@@ -18,11 +18,52 @@ public:
 
 	void onInitHeros()
 	{
-		initHeros(1, 1);
+		clearHeroArray();
+		setRand();
+
+		// Randomly assign player group
+		Group playerGrp = random(2) > 0 ? Group::Akatsuki : Group::Konoha;
+		Group enemyGrp = playerGrp == Group::Konoha ? Group::Akatsuki : Group::Konoha;
+		this->playerGroup = playerGrp;
+		this->gd.playerGroup = playerGrp;
+
+		// Resolve player character
+		string playerChar;
+		if (selectLayer->_playerSelect)
+		{
+			playerChar = selectLayer->_playerSelect;
+		}
+		else
+		{
+			gd.isRandomChar = true;
+			do {
+				setRand();
+				playerChar = kHeroList[random((int)kHeroNum)];
+			} while (playerChar == "None");
+			selectLayer->_playerSelect = playerChar.c_str();
+		}
+
+		// Resolve opponent — com1Select is the chosen enemy
+		string opponentChar;
+		if (selectLayer->_com1Select)
+		{
+			opponentChar = selectLayer->_com1Select;
+		}
+		else
+		{
+			do {
+				setRand();
+				opponentChar = kHeroList[random((int)kHeroNum)];
+			} while (opponentChar == playerChar || opponentChar == "None");
+		}
+
+		addHero(playerChar.c_str(), Role::Player, playerGrp);
+		addHero(opponentChar.c_str(), Role::Com, enemyGrp);
 	}
 
 	void onGameStart()
 	{
+		getGameLayer()->_enableGuardian = false;
 	}
 
 	void onGameOver()

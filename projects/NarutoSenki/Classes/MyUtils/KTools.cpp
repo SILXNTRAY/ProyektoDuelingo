@@ -5,10 +5,10 @@
 #include "../../../cocos2dx/platform/android/jni/JniHelper.h"
 #endif
 
-bool KTools::readXMLToArray(const string &filePath, CCArray *&array)
+bool KTools::readXMLToArray(const string& filePath, CCArray*& array)
 {
 	unsigned long nSize;
-	auto data = (const char *)FileUtils::sharedFileUtils()->getFileData(filePath.c_str(), "r", &nSize);
+	auto data = (const char*)FileUtils::sharedFileUtils()->getFileData(filePath.c_str(), "r", &nSize);
 	if (data == nullptr)
 	{
 		CCMessageBox(format("Data {} is null", filePath).c_str(), "Read XML Error");
@@ -44,8 +44,8 @@ bool KTools::readXMLToArray(const string &filePath, CCArray *&array)
 
 				while (dataEle)
 				{
-					const char *nodeKey = dataEle->FirstAttribute()->Value();
-					CCString *nodeValue = CCString::create(dataEle->GetText());
+					const char* nodeKey = dataEle->FirstAttribute()->Value();
+					CCString* nodeValue = CCString::create(dataEle->GetText());
 
 					// CCLog("%s:%s",nodeKey,nodeValue->getCString());
 					auto dataDic = CCDictionary::create();
@@ -61,13 +61,13 @@ bool KTools::readXMLToArray(const string &filePath, CCArray *&array)
 
 				while (frameEle)
 				{
-					const char *nodeKey;
+					const char* nodeKey;
 					if (is_same(frameEle->Name(), "f"))
 						nodeKey = frameEle->Name();
 					else
 						nodeKey = frameEle->FirstAttribute()->Value();
 
-					CCString *nodeValue = CCString::create(frameEle->GetText());
+					CCString* nodeValue = CCString::create(frameEle->GetText());
 
 					// CCLog("%s:%s",nodeKey,nodeValue->getCString());
 					auto frameDic = CCDictionary::create();
@@ -89,42 +89,42 @@ bool KTools::readXMLToArray(const string &filePath, CCArray *&array)
 	return true;
 }
 
-int isExisted(void *para, int n_column, char **column_value, char **column_name)
+int isExisted(void* para, int n_column, char** column_value, char** column_name)
 {
-	bool *isExisted_ = (bool *)para;
+	bool* isExisted_ = (bool*)para;
 	*isExisted_ = (**column_value) != '0';
 	return 0;
 }
 
-void KTools::encode(string &str, int radomKey)
+void KTools::encode(string& str, int radomKey)
 {
 	for (size_t i = 0; i < str.length(); i++)
 	{
-		int ch = str[i];
-		ch += radomKey;
-		str[i] = ch;
+		unsigned char ch = (unsigned char)str[i];
+		ch += (unsigned char)radomKey;
+		str[i] = (char)ch;
 	}
-	str += radomKey;
+	str += (char)(unsigned char)radomKey;
 }
 
-void KTools::decode(string &str)
+void KTools::decode(string& str)
 {
 	size_t num = str.length() - 1;
-	int key = str[num];
+	unsigned char key = (unsigned char)str[num];
 	str = str.substr(0, num);
 
 	for (size_t i = 0; i < str.length(); i++)
 	{
-		int ch = str[i];
+		unsigned char ch = (unsigned char)str[i];
 		ch -= key;
-		str[i] = ch;
+		str[i] = (char)ch;
 	}
 }
 
 void KTools::initTableInDB()
 {
-	sqlite3 *pDB = nullptr;
-	char *errorMsg = nullptr;
+	sqlite3* pDB = nullptr;
+	char* errorMsg = nullptr;
 	string path = FileUtils::sharedFileUtils()->getWritablePath() + "sql.db";
 	int result = sqlite3_open(path.c_str(), &pDB);
 	if (result != SQLITE_OK)
@@ -204,8 +204,8 @@ void KTools::initTableInDB()
 
 void KTools::initColumeInDB()
 {
-	sqlite3 *pDB = nullptr;
-	char *errorMsg = nullptr;
+	sqlite3* pDB = nullptr;
+	char* errorMsg = nullptr;
 	string path = FileUtils::sharedFileUtils()->getWritablePath() + "sql.db";
 	int result = sqlite3_open(path.c_str(), &pDB);
 	if (result != SQLITE_OK)
@@ -214,7 +214,7 @@ void KTools::initColumeInDB()
 		return;
 	}
 
-	char **result2;
+	char** result2;
 	int row = 0;
 	int column = 0;
 
@@ -233,7 +233,7 @@ void KTools::initColumeInDB()
 	}
 }
 
-void KTools::prepareFileOGG(const string &listName, bool unload /* =false */)
+void KTools::prepareFileOGG(const string& listName, bool unload /* =false */)
 {
 	if (!UserDefault::sharedUserDefault()->getBoolForKey("isPreload"))
 	{
@@ -249,7 +249,7 @@ void KTools::prepareFileOGG(const string &listName, bool unload /* =false */)
 	}
 
 	unsigned long nSize;
-	const char *pXmlBuffer = (const char *)FileUtils::sharedFileUtils()->getFileData(md5Path.c_str(), "r", &nSize);
+	const char* pXmlBuffer = (const char*)FileUtils::sharedFileUtils()->getFileData(md5Path.c_str(), "r", &nSize);
 	tinyxml2::XMLDocument doc;
 	doc.Parse(pXmlBuffer);
 	delete pXmlBuffer;
@@ -277,9 +277,9 @@ void KTools::prepareFileOGG(const string &listName, bool unload /* =false */)
 	}
 }
 
-sqlite3 *KTools::prepareTableInDB()
+sqlite3* KTools::prepareTableInDB()
 {
-	sqlite3 *pDB = nullptr;
+	sqlite3* pDB = nullptr;
 
 	string path = FileUtils::sharedFileUtils()->getWritablePath() + "sql.db";
 	int result = sqlite3_open(path.c_str(), &pDB);
@@ -293,10 +293,10 @@ sqlite3 *KTools::prepareTableInDB()
 	return pDB;
 }
 
-bool KTools::saveToSQLite(const char *table /* ="GameRecord"*/, const char *column /* =nullptr */, const char *value /* =nullptr */, bool isBuy /*= false */)
+bool KTools::saveToSQLite(const char* table /* ="GameRecord"*/, const char* column /* =nullptr */, const char* value /* =nullptr */, bool isBuy /*= false */)
 {
-	sqlite3 *pDB = prepareTableInDB();
-	char *errorMsg = nullptr;
+	sqlite3* pDB = prepareTableInDB();
+	char* errorMsg = nullptr;
 	if (pDB != nullptr)
 	{
 		int key = rand() % 60 + 40;
@@ -319,13 +319,13 @@ bool KTools::saveToSQLite(const char *table /* ="GameRecord"*/, const char *colu
 	return false;
 }
 
-string KTools::readFromSQLite(const char *table /* ="GameRecord" */, const char *column /* =nullptr */, const char *value /* =nullptr */)
+string KTools::readFromSQLite(const char* table /* ="GameRecord" */, const char* column /* =nullptr */, const char* value /* =nullptr */)
 {
-	sqlite3 *pDB = prepareTableInDB();
+	sqlite3* pDB = prepareTableInDB();
 
 	if (pDB != nullptr)
 	{
-		char **result;
+		char** result;
 
 		string sql = format("select {} from  GameRecord", "coin");
 		int row = 0;
@@ -343,33 +343,39 @@ string KTools::readFromSQLite(const char *table /* ="GameRecord" */, const char 
 	return "";
 }
 
-string KTools::readSQLite(const char *table, const char *column, const char *value, const char *targetColumn)
+string KTools::readSQLite(const char* table, const char* column, const char* value, const char* targetColumn)
 {
-	sqlite3 *pDB = prepareTableInDB();
+	sqlite3* pDB = prepareTableInDB();
 
 	if (pDB != nullptr)
 	{
-		char **result;
+		char** result;
 
 		string sql = format("select {},{} from  {}", column, targetColumn, table);
 		int row = 0;
-		int column = 0;
+		int col = 0;
 
-		sqlite3_get_table(pDB, sql.c_str(), &result, &row, &column, nullptr);
+		sqlite3_get_table(pDB, sql.c_str(), &result, &row, &col, nullptr);
+
+		CCLOG("[readSQLite] sql=%s rows=%d cols=%d seeking=%s", sql.c_str(), row, col, value);
 
 		string target;
-		for (int i = 0; i <= row * 2; i++)
+		for (int i = col; i < (row + 1) * col; i += col)
 		{
 			string str = result[i];
-
 			decode(str);
+			CCLOG("[readSQLite] i=%d decoded=%s match=%d", i, str.c_str(), (int)(str == value));
 			if (str == value)
 			{
 				target = result[i + 1];
 				decode(target);
+				CCLOG("[readSQLite] FOUND target=%s", target.c_str());
 				break;
 			}
 		}
+
+		if (target.empty())
+			CCLOG("[readSQLite] WARNING no match for value=%s", value);
 
 		if (!is_same(targetColumn, "column3") &&
 			!is_same(targetColumn, "column4"))
@@ -385,35 +391,43 @@ string KTools::readSQLite(const char *table, const char *column, const char *val
 	return "";
 }
 
-void KTools::saveSQLite(const char *table, const char *relatedColumn, const char *value, const char *targetColumn, const string &targetValue, bool isPlus)
+
+void KTools::saveSQLite(const char* table, const char* relatedColumn, const char* value, const char* targetColumn, const string& targetValue, bool isPlus)
 {
-	char *errorMsg = nullptr;
-	sqlite3 *pDB = prepareTableInDB();
+	char* errorMsg = nullptr;
+	sqlite3* pDB = prepareTableInDB();
 
 	if (pDB != nullptr)
 	{
-		char **result;
+		char** result;
 
 		string sql = format("select {},{} from {}", relatedColumn, targetColumn, table);
 		int row = 0;
-		int column = 0;
+		int col = 0;
 
-		sqlite3_get_table(pDB, sql.c_str(), &result, &row, &column, nullptr);
+		sqlite3_get_table(pDB, sql.c_str(), &result, &row, &col, nullptr);
+
+		CCLOG("[saveSQLite] sql=%s rows=%d cols=%d seeking=%s", sql.c_str(), row, col, value);
 
 		string target;
 		string columnValue;
-		for (int i = 0; i <= row * 2; i++)
+		for (int i = col; i < (row + 1) * col; i += col)
 		{
 			string str = result[i];
 			decode(str);
+			CCLOG("[saveSQLite] i=%d decoded=%s match=%d", i, str.c_str(), (int)(str == value));
 			if (str == value)
 			{
 				columnValue = result[i];
 				target = result[i + 1];
 				decode(target);
+				CCLOG("[saveSQLite] FOUND columnValue(raw)=%s target=%s", columnValue.c_str(), target.c_str());
 				break;
 			}
 		}
+
+		if (columnValue.empty())
+			CCLOG("[saveSQLite] WARNING no match for value=%s, UPDATE will be no-op", value);
 
 		string saveValue;
 		if (isPlus)
@@ -428,13 +442,19 @@ void KTools::saveSQLite(const char *table, const char *relatedColumn, const char
 		int key = rand() % 50 + 40;
 		encode(saveValue, key);
 		sql = format("update {} set {}='{}' where {}='{}'", table, targetColumn, saveValue, relatedColumn, columnValue);
-		sqlite3_exec(pDB, sql.c_str(), nullptr, nullptr, nullptr);
+		CCLOG("[saveSQLite] executing: %s", sql.c_str());
+		char* execErr = nullptr;
+		sqlite3_exec(pDB, sql.c_str(), nullptr, nullptr, &execErr);
+		if (execErr)
+			CCLOG("[saveSQLite] ERROR: %s", execErr);
+		else
+			CCLOG("[saveSQLite] UPDATE succeeded");
 
 		if (isPlus)
 		{
-			char **result2;
+			char** result2;
 			sql = "select coin from GameRecord";
-			sqlite3_get_table(pDB, sql.c_str(), &result2, &row, &column, nullptr);
+			sqlite3_get_table(pDB, sql.c_str(), &result2, &row, &col, nullptr);
 			string str2 = result2[1];
 			decode(str2);
 
@@ -456,10 +476,11 @@ void KTools::saveSQLite(const char *table, const char *relatedColumn, const char
 	sqlite3_close(pDB);
 }
 
-int KTools::readWinNumFromSQL(const char *heroName)
+
+int KTools::readWinNumFromSQL(const char* heroName)
 {
-	auto winNum = readSQLite("CharRecord", "name", heroName, "column1").c_str();
-	return to_int(winNum);
+	auto winNum = readSQLite("CharRecord", "name", heroName, "column1");
+	return to_int(winNum.c_str());
 }
 
 int KTools::readCoinFromSQL()
@@ -468,10 +489,137 @@ int KTools::readCoinFromSQL()
 	return to_int(coins.c_str());
 }
 
-const char *KTools::readRecordTimeFromSQL(const char *heroName)
+string KTools::readRecordTimeFromSQL(const char* heroName)
 {
-	auto recordTime = readSQLite("CharRecord", "name", heroName, "column3").c_str();
-	return recordTime;
+	return readSQLite("CharRecord", "name", heroName, "column3");
+}
+
+static void ensureDeathmatchStreakColumn(sqlite3* pDB)
+{
+	// Lazily add the column the first time it's needed -- ignore the error
+	// if it already exists, there's no clean "column exists" check in this
+	// sqlite3 C API without parsing table_info.
+	char* errorMsg = nullptr;
+	string sql = "alter table GameRecord add column streak char(20)";
+	sqlite3_exec(pDB, sql.c_str(), nullptr, nullptr, &errorMsg);
+}
+
+int KTools::readDeathmatchStreak()
+{
+	sqlite3* pDB = prepareTableInDB();
+	if (pDB == nullptr)
+		return 0;
+
+	ensureDeathmatchStreakColumn(pDB);
+
+	char** result;
+	string sql = "select streak from GameRecord";
+	int row = 0;
+	int column = 0;
+	char* errorMsg = nullptr;
+	sqlite3_get_table(pDB, sql.c_str(), &result, &row, &column, &errorMsg);
+
+	int streak = 0;
+	if (row >= 1 && result[1] != nullptr)
+	{
+		string str = result[1];
+		decode(str);
+		streak = to_int(str.c_str());
+	}
+
+	sqlite3_free_table(result);
+	sqlite3_close(pDB);
+	return streak;
+}
+
+void KTools::saveDeathmatchStreak(int streak)
+{
+	sqlite3* pDB = prepareTableInDB();
+	if (pDB == nullptr)
+		return;
+
+	ensureDeathmatchStreakColumn(pDB);
+
+	string value = std::to_string(streak);
+	int key = rand() % 60 + 40;
+	encode(value, key);
+
+	char* errorMsg = nullptr;
+	string sql = format("update GameRecord set streak='{}'", value);
+	sqlite3_exec(pDB, sql.c_str(), nullptr, nullptr, &errorMsg);
+
+	sqlite3_close(pDB);
+}
+
+static void ensureDeathmatchTeamColumn(sqlite3* pDB)
+{
+	char* errorMsg = nullptr;
+	string sql = "alter table GameRecord add column dm_team char(64)";
+	sqlite3_exec(pDB, sql.c_str(), nullptr, nullptr, &errorMsg);
+}
+
+void KTools::saveDeathmatchTeam(const string& playerChar, const string& ally1, const string& ally2)
+{
+	sqlite3* pDB = prepareTableInDB();
+	if (pDB == nullptr)
+		return;
+
+	ensureDeathmatchTeamColumn(pDB);
+
+	string combined = playerChar + "|" + ally1 + "|" + ally2;
+	int key = rand() % 60 + 40;
+	encode(combined, key);
+
+	char* errorMsg = nullptr;
+	string sql = format("update GameRecord set dm_team='{}'", combined);
+	sqlite3_exec(pDB, sql.c_str(), nullptr, nullptr, &errorMsg);
+
+	sqlite3_close(pDB);
+}
+
+bool KTools::readDeathmatchTeam(string& playerChar, string& ally1, string& ally2)
+{
+	sqlite3* pDB = prepareTableInDB();
+	if (pDB == nullptr)
+		return false;
+
+	ensureDeathmatchTeamColumn(pDB);
+
+	char** result;
+	string sql = "select dm_team from GameRecord";
+	int row = 0;
+	int column = 0;
+	char* errorMsg = nullptr;
+	sqlite3_get_table(pDB, sql.c_str(), &result, &row, &column, &errorMsg);
+
+	bool found = false;
+	if (row >= 1 && result[1] != nullptr)
+	{
+		string str = result[1];
+		decode(str);
+
+		size_t p1 = str.find('|');
+		if (p1 != string::npos)
+		{
+			playerChar = str.substr(0, p1);
+			size_t p2 = str.find('|', p1 + 1);
+			if (p2 != string::npos)
+			{
+				ally1 = str.substr(p1 + 1, p2 - p1 - 1);
+				ally2 = str.substr(p2 + 1);
+			}
+			else
+			{
+				ally1 = str.substr(p1 + 1);
+				ally2 = "";
+			}
+			found = !playerChar.empty();
+		}
+	}
+
+	sqlite3_free_table(result);
+	sqlite3_close(pDB);
+	return found;
 }
 
 string KTools::encodeData(string data)
@@ -488,15 +636,15 @@ string KTools::encodeData(string data)
 	return dataMD5;
 }
 
-bool CCTips::init(const char *tips)
+bool CCTips::init(const char* tips)
 {
 	RETURN_FALSE_IF(!Sprite::init());
 
 	setAnchorPoint(Vec2(0.5, 0.5));
 	auto strings = CCDictionary::createWithContentsOfFile("Config/strings.xml");
-	const char *reply = ((CCString *)strings->objectForKey(tips))->m_sString.c_str();
+	const char* reply = ((CCString*)strings->objectForKey(tips))->m_sString.c_str();
 
-	CCLabelTTF *tipLabel = CCLabelTTF::create(reply, FONT_NAME, 12);
+	CCLabelTTF* tipLabel = CCLabelTTF::create(reply, FONT_NAME, 12);
 	addChild(tipLabel, 5000);
 	setPosition(Vec2(winSize.width / 2, 50));
 	auto call = CallFunc::create(std::bind(&CCTips::onDestroy, this));
@@ -517,9 +665,9 @@ void CCTips::onDestroy()
 	removeFromParent();
 }
 
-CCTips *CCTips::create(const char *tips)
+CCTips* CCTips::create(const char* tips)
 {
-	CCTips *ab = new CCTips();
+	CCTips* ab = new CCTips();
 	if (ab && ab->init(tips))
 	{
 		ab->autorelease();

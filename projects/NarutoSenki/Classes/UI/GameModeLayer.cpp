@@ -2,6 +2,7 @@
 #include "UI/GameModeLayer.h"
 #include "UI/ModeMenuButton.hpp"
 #include "Constants/UiFlowKeys.hpp"
+#include "MyUtils/KTools.h"
 
 extern const GameData kDefaultGameData;
 
@@ -123,9 +124,9 @@ void GameModeLayer::initModeData()
 		modes[GameMode::Classic] = {"3 VS 3", "经典模式"};
 		modes[GameMode::FourVsFour] = {"4 VS 4", ""};
 		modes[GameMode::HardCore_4Vs4] = {"硬核模式 (4 VS 4)", "禁用装备"};
-		modes[GameMode::Boss] = {"Boss模式 (3 VS 1)", ""};
+		modes[GameMode::Boss] = {"决斗模式 (1 VS 1)", ""};
 		modes[GameMode::Clone] = {"克隆模式 (3 VS 3)", ""};
-		modes[GameMode::Deathmatch] = {"死亡竞赛 (3 VS 3)", ""};
+		modes[GameMode::Deathmatch] = {"死亡竞赛 (无尽 1 VS 1)", ""};
 		modes[GameMode::RandomDeathmatch] = {"随机死亡竞赛 (3 VS 3)", ""};
 	}
 	else // English
@@ -134,16 +135,11 @@ void GameModeLayer::initModeData()
 		modes[GameMode::Classic] = {"3 VS 3", "Classic Mode"};
 		modes[GameMode::FourVsFour] = {"4 VS 4", ""};
 		modes[GameMode::HardCore_4Vs4] = {"HardCore (4 VS 4)", "Disabled gear"};
-		modes[GameMode::Boss] = {"Boss (3 VS 3)", ""};
+		modes[GameMode::Boss] = {"Duel (1 VS 1 Arena)", ""};
 		modes[GameMode::Clone] = {"Clone (3 VS 3)", ""};
-		modes[GameMode::Deathmatch] = {"Deathmatch (3 VS 3)", ""};
+		modes[GameMode::Deathmatch] = {"Deathmatch (Endless 1 VS 1)", ""};
 		modes[GameMode::RandomDeathmatch] = {"Random Deathmatch (3 VS 3)", ""};
 	}
-
-	// init in developtment game modes
-	modes[GameMode::Boss].isLocked = true;
-	modes[GameMode::Deathmatch].isLocked = true;
-	modes[GameMode::Deathmatch].useMask2 = true;
 
 	// init mode handlers
 	for (size_t i = 0; i < GameMode::__Internal_Max_Length; i++)
@@ -181,29 +177,135 @@ void GameModeLayer::selectMode(GameMode mode)
 			modes.at(i).isLocked = true;
 		CCLOG("Selected %s mode", data.title.c_str());
 
-		s_GameMode = mode;
-		bool enableCustomSelect = false;
-		if (Cheats < kMaxCheats && (mode == GameMode::FourVsFour || mode == GameMode::HardCore_4Vs4))
+		if (mode == GameMode::Deathmatch)
 		{
-			enableCustomSelect = false;
-		}
-		else if (mode != GameMode::RandomDeathmatch && mode != GameMode::Clone)
-		{
-			enableCustomSelect = Cheats >= kMaxCheats;
+			string savedPlayer, savedAlly1, savedAlly2;
+			if (KTools::readDeathmatchStreak() > 0 && KTools::readDeathmatchTeam(savedPlayer, savedAlly1, savedAlly2))
+			{
+				showDeathmatchContinuePrompt(savedPlayer, savedAlly1, savedAlly2);
+				return;
+			}
 		}
 
-		// call lua global function StartMenu.enterSelectLayer
-		auto pStack = get_luastack;
-		auto state = pStack->getLuaState();
-		lua_getglobal(state, UiFlowKeys::kEnterSelectLayer);
-		pStack->pushInt(mode);
-		pStack->pushBoolean(enableCustomSelect);
-		pStack->executeFunction(2);
-
-		auto handler = getGameModeHandler();
-		handler->setOldCheats(Cheats);
-		handler->init();
+		enterMode(mode);
 	}
+}
+
+void GameModeLayer::enterMode(GameMode mode)
+{
+	s_GameMode = mode;
+	bool enableCustomSelect = false;
+	if (Cheats < kMaxCheats && (mode == GameMode::FourVsFour || mode == GameMode::HardCore_4Vs4))
+	{
+		enableCustomSelect = false;
+	}
+	else if (mode != GameMode::RandomDeathmatch && mode != GameMode::Clone)
+	{
+		enableCustomSelect = Cheats >= kMaxCheats;
+	}
+
+	// call lua global function StartMenu.enterSelectLayer
+	auto pStack = get_luastack;
+	auto state = pStack->getLuaState();
+	lua_getglobal(state, UiFlowKeys::kEnterSelectLayer);
+	pStack->pushInt(mode);
+	pStack->pushBoolean(enableCustomSelect);
+	pStack->executeFunction(2);
+
+	auto handler = getGameModeHandler();
+	handler->setOldCheats(Cheats);
+	handler->init();
+}
+
+void GameModeLayer::showDeathmatchContinuePrompt(const string &playerChar, const string &ally1, const string &ally2)
+{
+	_dmSavedPlayer = playerChar;
+	_dmSavedAlly1 = ally1;
+	_dmSavedAlly2 = ally2;
+
+	if (dmPromptLayer)
+		return;
+
+	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/select.ogg");
+	dmPromptLayer = Layer::create();
+
+	// Reusing GameOver's "back to menu" confirm dialog assets as-is for
+	// now, just repurposed for a different question.
+	auto bg = Sprite::createWithSpriteFrameName("confirm_bg.png");
+	bg->setPosition(Vec2(winSize.width / 2, winSize.height / 2));
+
+	auto title = Sprite::createWithSpriteFrameName("confirm_title.png");
+	title->setPosition(Vec2(winSize.width / 2, winSize.height / 2 + 38));
+
+	auto text = Sprite::createWithSpriteFrameName("btm_text.png");
+	text->setPosition(Vec2(winSize.width / 2, winSize.height / 2 + 8));
+
+	MenuItem *yes_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("yes_btn1.png"), Sprite::createWithSpriteFrameName("yes_btn2.png"), this, menu_selector(GameModeLayer::onDeathmatchContinueYes));
+	MenuItem *no_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("no_btn1.png"), Sprite::createWithSpriteFrameName("no_btn2.png"), this, menu_selector(GameModeLayer::onDeathmatchContinueNo));
+
+	Menu *confirm_menu = Menu::create(yes_btn, no_btn, nullptr);
+	confirm_menu->alignItemsHorizontallyWithPadding(24);
+	confirm_menu->setPosition(Vec2(winSize.width / 2, winSize.height / 2 - 30));
+
+	dmPromptLayer->addChild(bg, 1);
+	dmPromptLayer->addChild(confirm_menu, 2);
+	dmPromptLayer->addChild(title, 2);
+	dmPromptLayer->addChild(text, 2);
+	addChild(dmPromptLayer, 500);
+}
+
+void GameModeLayer::onDeathmatchContinueYes(Ref *sender)
+{
+	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/confirm.ogg");
+	dmPromptLayer->removeFromParent();
+	dmPromptLayer = nullptr;
+
+	s_GameMode = GameMode::Deathmatch;
+	auto handler = getGameModeHandler();
+	handler->setOldCheats(Cheats);
+	handler->init();
+
+	// We're skipping SelectLayer's interactive screen entirely, but it's
+	// still what's responsible for loading these -- load the same set
+	// directly so nothing further down the line (LoadLayer, HUD, etc.)
+	// reaches for a sprite frame that was never brought in.
+	addSprites("Record.plist");
+	addSprites("Record2.plist");
+	addSprites("Select.plist");
+	addSprites("UI.plist");
+	addSprites("Report.plist");
+	addSprites("Ougis.plist");
+	addSprites("Ougis2.plist");
+	addSprites("Map.plist");
+	addSprites("Gears.plist");
+
+	auto tempSelect = SelectLayer::create();
+	tempSelect->setSelectHero(_dmSavedPlayer.c_str());
+	if (!_dmSavedAlly1.empty())
+		tempSelect->setCom1Select(_dmSavedAlly1.c_str());
+	if (!_dmSavedAlly2.empty())
+		tempSelect->setCom2Select(_dmSavedAlly2.c_str());
+
+	handler->selectLayer = tempSelect;
+	handler->onInitHeros();
+
+	auto loadScene = Scene::create();
+	auto loadLayer = LoadLayer::create();
+	loadLayer->preloadAudio();
+	loadScene->addChild(loadLayer);
+
+	Director::sharedDirector()->replaceScene(TransitionFade::create(1.0f, loadScene));
+}
+
+void GameModeLayer::onDeathmatchContinueNo(Ref *sender)
+{
+	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/cancel.ogg");
+	dmPromptLayer->removeFromParent();
+	dmPromptLayer = nullptr;
+
+	KTools::saveDeathmatchStreak(0);
+
+	enterMode(GameMode::Deathmatch);
 }
 
 bool GameModeLayer::setSelect(GameMode mode)

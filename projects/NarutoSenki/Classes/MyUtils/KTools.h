@@ -28,7 +28,16 @@ public:
 
 	static int readWinNumFromSQL(const char *heroName);
 	static int readCoinFromSQL();
-	static const char *readRecordTimeFromSQL(const char *heroName);
+	static string readRecordTimeFromSQL(const char* heroName);
+
+	// Deathmatch (endless arcade) win-streak persistence.
+	static int readDeathmatchStreak();
+	static void saveDeathmatchStreak(int streak);
+
+	// Deathmatch last-used team (main pick + up to 2 bench allies), so the
+	// mode-select screen can offer to resume it instead of picking fresh.
+	static void saveDeathmatchTeam(const string &playerChar, const string &ally1, const string &ally2);
+	static bool readDeathmatchTeam(string &playerChar, string &ally1, string &ally2);
 
 	static string encodeData(string data);
 };

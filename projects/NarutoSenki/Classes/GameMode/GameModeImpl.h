@@ -23,6 +23,18 @@ inline GameMode getGameMode()
 	return s_GameMode;
 }
 
+// Boss (1v1 Duel Arena) and Deathmatch (endless arcade) both play out as
+// open-ended, non-standard-length runs rather than a normal timed team
+// match, so per-match checks like "fastest win" bonuses or per-hero
+// "best time" records don't mean the same thing there. Checks gating on
+// "is this one of those modes" should use this rather than hardcoding
+// GameMode::Boss on its own -- that was the bug that left Deathmatch out
+// of a couple of these checks in the first place.
+inline bool isDuelMode()
+{
+	return s_GameMode == GameMode::Boss || s_GameMode == GameMode::Deathmatch;
+}
+
 inline IGameModeHandler *getGameModeHandler()
 {
 	return s_ModeHandlers[static_cast<size_t>(s_GameMode)].get();
