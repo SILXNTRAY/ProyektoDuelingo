@@ -72,6 +72,8 @@ enum ABType : uint8_t
 	SKILL3,
 	OUGIS1,
 	OUGIS2,
+	AllySwitch1, // Duel mode: swap to benched ally in slot 0
+	AllySwitch2, // Duel mode: swap to benched ally in slot 1
 };
 
 // declare GearButton

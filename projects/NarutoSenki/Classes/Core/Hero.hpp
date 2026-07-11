@@ -263,14 +263,19 @@ public:
 			setCoin(50);
 		}
 
-		if (!getName().empty() && isPlayer())
+		if (!getName().empty() && (isPlayer() || isCom()))
 		{
 			auto oldCharName = getName();
 			bool isUpdateUI = oldCharName != name;
 			setName(name);
 
 			if (isUpdateUI)
-				getGameLayer()->updateHudSkillButtons();
+			{
+				if (isPlayer())
+					getGameLayer()->updateHudSkillButtons();
+				else if (isCom())
+					getGameLayer()->getHudLayer()->refreshEnemyAvatar(name);
+			}
 		}
 		else
 		{
@@ -472,7 +477,8 @@ public:
 					doAI();
 				}
 				getGameLayer()->getHudLayer()->status_hpbar->setOpacity(255);
-				getGameLayer()->setHPLose(getHpPercent());
+				if (isPlayer())
+					getGameLayer()->setHPLose(getHpPercent());
 			}
 			scheduleUpdate();
 		}

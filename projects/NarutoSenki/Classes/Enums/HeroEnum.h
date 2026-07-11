@@ -8,7 +8,7 @@ namespace HeroEnum
 	mk_const(Chiyo);
 	mk_const(Choji);
 	mk_const(Deidara);
-	mk_const(Gaara);
+	mk_const(Gaara);	
 	mk_const(Hidan);
 	mk_const(Hinata);
 	mk_const(Hiruzen);
@@ -40,6 +40,7 @@ namespace HeroEnum
 
 	mk_const(Neji);
 	mk_const(Orochimaru);
+	mk_const(Mitsuki);
 	// Pain
 	mk_const(Pain);
 	mk_const(AnimalPath);

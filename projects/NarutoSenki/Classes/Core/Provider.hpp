@@ -27,6 +27,7 @@
 #include "Shinobi/Naruto.hpp"
 #include "Shinobi/Neji.hpp"
 #include "Shinobi/Orochimaru.hpp"
+#include "Shinobi/Mitsuki.hpp"
 #include "Shinobi/Pain.hpp"
 #include "Shinobi/Sai.hpp"
 #include "Shinobi/Sakura.hpp"
@@ -118,6 +119,7 @@ public:
 		is("SageNaruto") 					is_role(Role::Clone) ptr = new SageNarutoClone();	else ptr = new Naruto();
 		is("Neji") 							ptr = new Neji();
 		is("Orochimaru") 					ptr = new Orochimaru();
+		is("Mitsuki") 					    ptr = new Mitsuki();
 		is_or("Pain", "Nagato") 			ptr = new Pain();
 		is("AnimalPath") 					ptr = new AnimalPath();
 		is("AsuraPath") 					ptr = new AsuraPath();
