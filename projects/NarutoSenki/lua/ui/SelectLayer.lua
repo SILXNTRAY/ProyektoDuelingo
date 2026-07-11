@@ -6,10 +6,25 @@ function SelectLayer:init()
 
     self.mode = _G.mode
     self.enableCustomSelect = _G.enableCustomSelect
-    if self.mode == GameMode.Clone or self.mode == GameMode.OneVsOne then
+    if self.mode == GameMode.Clone then
         self.enableCustomSelect = false
         self.is3v3Mode = false
         self.is4v4Mode = false
+        self.is1v1Mode = false
+    elseif self.mode == GameMode.OneVsOne then
+        self.enableCustomSelect = true
+        self.is3v3Mode = false
+        self.is4v4Mode = false
+        self.is1v1Mode = true
+        self.isBossMode = false
+        self.isDeathmatchMode = false
+    elseif self.mode == GameMode.Boss or self.mode == GameMode.Deathmatch then
+        self.enableCustomSelect = true
+        self.is3v3Mode = false
+        self.is4v4Mode = false
+        self.is1v1Mode = true
+        self.isBossMode = self.mode == GameMode.Boss
+        self.isDeathmatchMode = self.mode == GameMode.Deathmatch
     else
         self.is3v3Mode = self.mode == GameMode.Classic or self.mode ==
                              GameMode.RandomDeathmatch
@@ -18,7 +33,7 @@ function SelectLayer:init()
     end
     self.enableHardCore = false
 
-    self.pageNum = 3
+    self.pageNum = 4
 
     self._comLabel1 = nil
     self._comLabel2 = nil
@@ -26,6 +41,8 @@ function SelectLayer:init()
     self._com1Select = nil
     self._com2Select = nil
     self._com3Select = nil
+    self._ally1Select = nil
+    self._ally2Select = nil
 
     self._heroName = nil
     self._heroHalfImage = nil
@@ -154,18 +171,11 @@ function SelectLayer:init()
         local Column = idx % 7
         local Row = toint(idx / 7)
         local Page = toint(idx / 21)
-        -- log(
-        --     ' -> load character %s\t[ Column: %d Row: %d Page: %d ] [ pos: %f, %f ]',
-        --     charName, Column, Row, Page,
-        --     width / 2 - 36 + (Column - 1) * 27 + Column / 4 * 10,
-        --     height - 112 - (72 * (Row - 3 * Page)))
 
         local select_btn = SelectButton:create(charName .. '_select.png')
         select_btn._selectLayer = self
         select_btn._charName = charName
-        --           -- LAYOUT --
-        -- --- LEFT ---        --- RIGHT ---
-        -- 1, 2, 3, 4, padding 5, 6, 7
+        
         local groupPadding = toint(Column / 4) * 10
         select_btn:setPosition(CCPoint(width / 2 - 36 + (Column - 1) * 27 +
                                            groupPadding,
@@ -215,7 +225,9 @@ function SelectLayer:init()
     self.selectHero = selectBtn._charName
 
     if self.enableCustomSelect then
-        if self.is3v3Mode or self.is4v4Mode then
+        if self.is1v1Mode then
+            self:initCustomSelectMode1v1()
+        elseif self.is3v3Mode or self.is4v4Mode then
             self:initCustomSelectMode()
         end
     end
@@ -231,7 +243,6 @@ function SelectLayer:init()
 
     local start_btn = ui.newImageMenuItem({
         image = '#start_btn.png',
-        -- call c++ layer function
         listener = function() self:onGameStart() end
     })
     local menu = ui.newMenu({start_btn})
@@ -248,7 +259,6 @@ function SelectLayer:init()
     menu2:setPosition(width - 35, 96)
     self:addChild(menu2, 5)
 
-    -- Desktop return button
     if _G.platform == 'desktop' then
         local skill_btn = ui.newImageMenuItem({
             image = '#return_btn.png',
@@ -266,27 +276,6 @@ end
 function SelectLayer:initCustomSelectMode()
     log('Initial Custom Select Mode...')
     local teamSelector = display.newLayer()
-    -- local uiLayer = TouchGroup:create()
-    -- teamSelector:addChild(uiLayer, 5)
-
-    -- local hardcore_switch_btn = CheckBox:create()
-    -- hardcore_switch_btn:loadTextures( -- load textures
-    -- "check_bg.png", "check_bg.png", "check.png", "", "", ns.UITexType.Local)
-    -- -- "", -- backGround
-    -- -- "", -- backGroundSelected
-    -- -- "", -- cross
-    -- -- "", -- backGroundDisabled
-    -- -- "", -- frontCrossDisabled
-    -- -- ns.UITexType.Plist)
-    -- hardcore_switch_btn:setPosition(
-    --     CCPoint(text:getContentSize().width + 5, 260))
-    -- hardcore_switch_btn:setScale(0.4)
-    -- hardcore_switch_btn:addEventListenerCheckBox(
-    --     function(_, event)
-    --         self.enableHardCore = event == ns.CheckBoxEventType.selected
-    --         -- log('Is enable hardcore [ %s ]', tostring(self.enableHardCore))
-    --     end)
-    -- uiLayer:addWidget(hardcore_switch_btn)
 
     local teamBg = display.newSprite('#team_bg.png', 0, 185)
     teamBg:setAnchorPoint(0, 0)
@@ -342,13 +331,62 @@ function SelectLayer:initCustomSelectMode()
     self:addChild(teamSelector, 50)
 end
 
+function SelectLayer:initCustomSelectMode1v1()
+    log('Initial Custom Select Mode (1v1)...')
+    local teamSelector = display.newLayer()
+
+    local teamBg = display.newSprite('#team_bg.png', 0, 185)
+    teamBg:setAnchorPoint(0, 0)
+    teamSelector:addChild(teamBg)
+
+    if self.isBossMode or self.isDeathmatchMode then
+        -- Boss/Deathmatch mode: no manual enemy pick, only 2 allies to bench.
+        local allySelector1 = display.newSprite('#unknow_select.png', 2, 194)
+        allySelector1:setAnchorPoint(0, 0)
+        teamSelector:addChild(allySelector1)
+        self._allySelector1 = allySelector1
+
+        self._allyLabel1 = display.newSprite('#com_label.png')
+        self._allyLabel1:setPosition(
+            allySelector1:getPositionX() + allySelector1:getContentSize().width + 2 + 18,
+            allySelector1:getPositionY() + allySelector1:getContentSize().height / 2)
+        teamSelector:addChild(self._allyLabel1)
+
+        local allySelector2 = display.newSprite('#unknow_select.png')
+        allySelector2:setAnchorPoint(0, 0)
+        allySelector2:setPosition(allySelector1:getPositionX() +
+                                       allySelector1:getContentSize().width + 40,
+                                   allySelector1:getPositionY())
+        teamSelector:addChild(allySelector2)
+        self._allySelector2 = allySelector2
+
+        self._allyLabel2 = display.newSprite('#com_label.png')
+        self._allyLabel2:setPosition(
+            allySelector2:getPositionX() + allySelector2:getContentSize().width + 3 + 18,
+            allySelector2:getPositionY() + allySelector2:getContentSize().height / 3)
+        teamSelector:addChild(self._allyLabel2)
+    else
+        -- Original OneVsOne test mode: single opponent slot, no allies.
+        local comSelector1 = display.newSprite('#unknow_select.png', 2, 194)
+        comSelector1:setAnchorPoint(0, 0)
+        teamSelector:addChild(comSelector1)
+        self._comSelector1 = comSelector1
+
+        self._comLabel1 = display.newSprite('#com_label.png')
+        self._comLabel1:setPosition(
+            comSelector1:getPositionX() + comSelector1:getContentSize().width + 2 + 18,
+            comSelector1:getPositionY() + comSelector1:getContentSize().height / 2)
+        teamSelector:addChild(self._comLabel1)
+    end
+
+    self:addChild(teamSelector, 50)
+end
+
 function SelectLayer:onQuestBtn()
-    -- not support
     self:setTip('ComingSoon')
 end
 
 function SelectLayer:onRankingButtonClick()
-    -- not support
     self:setTip('ComingSoon')
 end
 
@@ -420,6 +458,35 @@ function SelectLayer:setSelected(btn)
         self._heroName = display.newSprite(charName .. '_font.png', 100, 20)
         self._heroName:setAnchorPoint(CCPoint(0.5, 0))
         self:addChild(self._heroName, 5)
+    elseif (self.isBossMode or self.isDeathmatchMode) and not self._com1Select then
+        self._allySelector1:setDisplayFrame(
+            display.newSpriteFrame(self.selectHero .. '_small.png'))
+
+        if btn._clickTime >= 2 then
+            self._com1Select = self.selectHero
+            self:setCom1Select(self._com1Select)
+
+            self._allyLabel1:stopAllActions()
+            self._allyLabel1:setOpacity(255)
+            self._allyLabel1:setDisplayFrame(
+                display.newSpriteFrame('com_label2.png'))
+        end
+    elseif (self.isBossMode or self.isDeathmatchMode) and not self._com2Select then
+        self._allySelector2:setDisplayFrame(
+            display.newSpriteFrame(self.selectHero .. '_small.png'))
+
+        if btn._clickTime >= 2 then
+            self._com2Select = self.selectHero
+            self:setCom2Select(self._com2Select)
+
+            self._allyLabel2:stopAllActions()
+            self._allyLabel2:setOpacity(255)
+            self._allyLabel2:setDisplayFrame(
+                display.newSpriteFrame('com_label2.png'))
+    
+            self._selectImg:removeFromParent()
+            self._selectImg = nil
+        end
     elseif not self._com1Select then
         self._comSelector1:setDisplayFrame(
             display.newSpriteFrame(self.selectHero .. '_small.png'))
@@ -432,6 +499,11 @@ function SelectLayer:setSelected(btn)
             self._comLabel1:setOpacity(255)
             self._comLabel1:setDisplayFrame(
                 display.newSpriteFrame('com_label2.png'))
+
+            if self.is1v1Mode and not self.enableAllySelect then
+                self._selectImg:removeFromParent()
+                self._selectImg = nil
+            end
         end
     elseif not self._com2Select then
         self._comSelector2:setDisplayFrame(
@@ -470,6 +542,10 @@ function SelectLayer:noComSelect()
         return self._com3Select
     elseif self.is3v3Mode then
         return self._com2Select
+    elseif self.isBossMode or self.isDeathmatchMode then
+        return self._com2Select
+    elseif self.is1v1Mode then
+        return self._com1Select
     else
         return self._playerSelect
     end

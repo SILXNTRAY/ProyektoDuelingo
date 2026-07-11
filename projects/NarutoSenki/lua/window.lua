@@ -4,11 +4,11 @@
 
 WINDOW_TITLE        = 'Naruto Senki'
 
-ENABLE_FULL_SCREEN  = false -- Windwos OS Only
+ENABLE_FULL_SCREEN  = false-- Windwos OS Only
 
 -- one
-WINDOW_WIDTH        = 1600
-WINDOW_HEIGHT       = 900
+WINDOW_WIDTH        = 1014
+WINDOW_HEIGHT       = 480
 
 -- two
 -- WINDOW_WIDTH        = 1280

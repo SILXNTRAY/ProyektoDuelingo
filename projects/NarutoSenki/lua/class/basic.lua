@@ -30,8 +30,8 @@ ns.CharactersLayout = {
         -- },
     -- Page Four
     -- {
-        -- _None,			_None,			_None,			_None,      --[[ Right ]] _None,		_None,		    _None,
-        -- _None,			_None,			_None,			_None,      --[[ Right ]] _None,		_None,		    _None,
-        -- _None,			_None,			_None,			_None,      --[[ Right ]] _None,		_None,		    _None,
+         _None,			_None,			'Mitsuki',			_None,      --[[ Right ]] _None,		_None,		    _None,
+         _None,			_None,			_None,			_None,      --[[ Right ]] _None,		_None,		    _None,
+         _None,			_None,			_None,			_None,      --[[ Right ]] _None,		_None,		    _None,
     -- },
 }
