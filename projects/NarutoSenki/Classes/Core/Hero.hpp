@@ -567,6 +567,20 @@ public:
 	/** Perform default AI logic (Hero::perform) */
 	virtual void setAI(float dt)
 	{
+		// Retiring heroes (see CharacterBase::retireAndDespawnWhenIdle) are
+		// flagged _isAI/Role::Com purely so the rest of the game treats them
+		// like a normal ally-controlled unit — they should NOT actually run
+		// combat AI. perform() targets/chases/attacks on every tick with no
+		// regard for _isRetiring (only the attack branch checks
+		// isFreeState(), the movement/targeting fallback doesn't check
+		// anything), so calling it here would have the hero keep fighting
+		// indefinitely instead of winding down. Skipping aiHandler()
+		// entirely just lets whatever action it was already mid-way through
+		// finish naturally, which is what actually lets
+		// checkRetireFinish's numberOfRunningActionsInTarget check reach 0.
+		if (_isRetiring)
+			return;
+
 		// Not check nullable reference
 		aiHandler();
 		// proxy->perform(this);
