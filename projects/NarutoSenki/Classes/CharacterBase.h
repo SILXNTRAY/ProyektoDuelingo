@@ -101,6 +101,19 @@ public:
 	bool				_isAI;
 	bool				_isControlled;
 
+	// True once a switched-out ally hero has been handed to AI to finish its
+	// current action before despawning (see GameLayer::switchToAllySlot /
+	// switchEnemyAllySlot and CharacterBase::retireAndDespawnWhenIdle).
+	bool				_isRetiring = false;
+	// Safety-net timer, not the primary despawn trigger — idle() itself
+	// calls despawnRetiredHero() directly the moment a retiring hero's
+	// current action genuinely completes (see the comments on
+	// retireAndDespawnWhenIdle). Some states (JUMP notably) never call
+	// idle() to end themselves though, especially with AI decisions
+	// suppressed, so this exists purely so a retiring hero can't get stuck
+	// on-screen forever if that happens.
+	float				_retireElapsed = 0.0f;
+
 	PROP_Vector(vector<GearType>, _gearArray, GearArray);
 
 	bool				enableDead	 = true;
@@ -296,6 +309,23 @@ public:
 
 	virtual void		doAI();
 
+	// Hands control of this hero to AI so it can finish whatever it's
+	// currently doing (skill/attack animation, or just idling), then tears
+	// it down once it goes idle. Used when a hero with an active summon/
+	// puppet (e.g. Chiyo, Lee/RockLee) gets switched out — rather than
+	// despawning immediately, it lingers as a temporary AI ally so its
+	// action isn't cut off mid-animation.
+	void				retireAndDespawnWhenIdle();
+
+	// The actual teardown, called from idle() the moment a retiring hero's
+	// current action genuinely completes (idle() is the same function
+	// every attack/skill/hurt sequence in this codebase already calls as
+	// its "I'm done, back to rest" signal — see the comments on
+	// retireAndDespawnWhenIdle's definition for why polling _state from the
+	// outside isn't reliable enough to use instead), or from
+	// checkRetireFinish's timeout fallback if idle() never ends up firing.
+	void				despawnRetiredHero();
+
 
 	virtual void		changeAction();
 	void				changeAction2();
@@ -441,6 +471,7 @@ protected:
 	CCRect				setHitBox();
 
 	void				checkActionFinish(float dt);
+	void				checkRetireFinish(float dt);
 
 	void				setRestore(float dt);
 

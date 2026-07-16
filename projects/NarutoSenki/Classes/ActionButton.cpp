@@ -181,12 +181,23 @@ bool ActionButton::isCanClick()
 			}
 			else if (_abType == AllySwitch1 || _abType == AllySwitch2)
 			{
-				auto player = getGameLayer()->currentPlayer;
+				auto gl = getGameLayer();
+				auto player = gl->currentPlayer;
 				State s = player->getState();
-				bool blocked = (s == State::NATTACK || s == State::SATTACK ||
-					s == State::OATTACK || s == State::O2ATTACK ||
-					player->_skillChangeBuffValue != 0);
-				if (getTimeCount() == 0 && !blocked && s != State::DEAD)
+				// No longer blocked by attack/skill state or cBuff — see
+				// CharacterBase::retireAndDespawnWhenIdle. The outgoing hero
+				// gets handed to AI and finishes on its own instead of the
+				// click being refused.
+				//
+				// Elimination is checked here too, not just in the visual
+				// lock (HudLayer::updateAllySwitchButtons) — this is the
+				// actual click gate, same reasoning as everywhere else in
+				// this file that the visual lock alone isn't the real
+				// enforcement point.
+				int slotIndex = (_abType == AllySwitch1) ? 0 : 1;
+				bool eliminated = (int)gl->_allyRoster.size() > slotIndex &&
+					gl->isRosterNameEliminated(gl->_allyRoster[slotIndex], true);
+				if (getTimeCount() == 0 && s != State::DEAD && !eliminated)
 				{
 					return true;
 				}
@@ -253,6 +264,30 @@ void ActionButton::beganAnimation(bool isLock)
 		markSprite->stopAllActions();
 		markSprite->runAction(_freezeAction);
 	}
+}
+
+// Bumps _timeCount up to at least minMs (via std::max at the call site, so
+// this never shortens a longer cooldown already running) and makes sure
+// it'll actually count back down to 0 on its own. Poking setTimeCount()
+// directly instead of going through here is what caused the "other slot
+// stays locked forever" bug: updateCDLabel is the only thing that ever
+// decrements _timeCount, and it's only ever scheduled from inside
+// beganAnimation() -- so a button that was never clicked (only had its
+// _timeCount bumped by the other slot's switch) would sit at that value
+// forever, with nothing left running to bring it back down.
+void ActionButton::applyMinCooldown(uint32_t minMs)
+{
+	if (getTimeCount() >= minMs)
+		return;
+
+	setTimeCount(minMs);
+
+	// No cdLabel for this one on purpose -- minMs here is well under 1000,
+	// and updateCDLabel's display (getTimeCount() / 1000) would show "0"
+	// for the entire brief window, which reads as broken rather than
+	// informative. The real ~15s cooldown from beganAnimation() still gets
+	// its label as normal; this is just a short, silent lock.
+	schedule(schedule_selector(ActionButton::updateCDLabel), 1.0f);
 }
 
 void ActionButton::setGearType(GearType type)

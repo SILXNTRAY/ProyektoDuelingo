@@ -57,6 +57,15 @@ public:
 	PROP(HudLayer *, _delegate, Delegate);
 	void beganAnimation(bool isLock = false);
 	void updateCDLabel(float dt);
+	// Bumps _timeCount up to at least minMs (never down — won't shorten a
+	// longer cooldown already in progress) and makes sure it'll actually
+	// decay back to 0 on its own. Unlike poking setTimeCount() directly,
+	// this is safe to call on a button that wasn't otherwise just clicked:
+	// updateCDLabel is the only thing that ever counts _timeCount back
+	// down, and it's only ever scheduled from inside beganAnimation(), so
+	// setting a nonzero value without going through here would leave it
+	// stuck forever with nothing left to bring it back to 0.
+	void applyMinCooldown(uint32_t minMs);
 
 	static ActionButton *create(const string &szImage);
 

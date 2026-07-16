@@ -32,6 +32,10 @@
 // Tile maps (Made with Tiled)
 #define GetMapPath(mapId) format("Maps/{}.tmx", mapId).c_str()
 #define GetMapBgPath(mapId) format("Maps/map_bg{}.png", mapId).c_str()
+// Duel-mode maps (1v1 arena) live in their own subfolder, separate from and
+// numbered independently of the regular Maps/ pool — see
+// GameLayer::getDuelMapCount()/initTileMap().
+#define GetDuelMapPath(mapId) format("Maps/Duels/{}.tmx", mapId).c_str()
 
 enum class Role : uint8_t
 {

@@ -252,29 +252,35 @@ void HudLayer::updateAllySwitchButtons(float dt)
 	if (!player)
 		return;
 
-	bool blocked = false;
-	State s = player->getState();
-	if (s == State::NATTACK || s == State::SATTACK || s == State::OATTACK || s == State::O2ATTACK)
-		blocked = true;
-	if (player->_skillChangeBuffValue != 0)
-		blocked = true;
-
+	// Switching no longer gets blocked by the player's attack/skill state or
+	// by cBuff (see CharacterBase::retireAndDespawnWhenIdle) — the outgoing
+	// hero is handed to AI and finishes on its own instead of being cut off,
+	// so there's nothing left here to guard against. The button's own CD
+	// timer (set via setCD(15000) at creation) is a separate, unrelated
+	// rate-limit and still applies on its own.
+	//
+	// Elimination (a roster slot's character having died — see
+	// GameLayer::forceSwitchOnDeath) is a separate, permanent lock on top
+	// of all that: once a character's out, that slot shows an "X" and
+	// never unlocks again for the rest of the match, regardless of CD.
+	auto* gl = getGameLayer();
 	ActionButton* buttons[2] = { allySwitch1Button, allySwitch2Button };
-	for (auto btn : buttons)
+	for (int i = 0; i < 2; i++)
 	{
+		ActionButton* btn = buttons[i];
 		if (!btn)
 			continue;
 
-		if (blocked)
+		bool eliminated = (int)gl->_allyRoster.size() > i && gl->isRosterNameEliminated(gl->_allyRoster[i], true);
+		if (eliminated)
 		{
-			if (btn->getTimeCount() == 0 && !btn->_isLock)
+			if (!btn->_isLock)
 				btn->setLock(true);
+			continue;
 		}
-		else
-		{
-			if (btn->_isLock)
-				btn->unLock();
-		}
+
+		if (btn->getTimeCount() == 0 && btn->_isLock)
+			btn->unLock();
 	}
 }
 

@@ -111,6 +111,13 @@ public:
 	virtual void onCharacterDead(CharacterBase *c) = 0;
 	virtual void onCharacterReborn(CharacterBase *c) = 0;
 	virtual void onSurrender() {}
+	// Fires once a side has lost every one of its characters (see
+	// GameLayer::processPendingDeaths) — the actual match-ending moment for
+	// modes using the eliminate/force-switch duel model, as opposed to
+	// onCharacterDead() which fires per individual death. Modes that don't
+	// care (most of them — a single death already ends the match for them)
+	// can leave this as the default no-op.
+	virtual void onSideEliminated(bool isPlayerSide) {}
 	virtual vector<string> getExtraPreloadChars() { return {}; }
 
 	inline const GameData &getGameData() { return gd; }
@@ -136,6 +143,24 @@ protected:
 	{
 		heroDataVector.clear();
 		heroVector.clear();
+	}
+
+	// Lets a mode override a specific already-initialized hero's name
+	// after initHeros() has picked one (heroDataVector is private, and
+	// initHeros()'s internal random selection has no hook to force/exclude
+	// picks beyond the player's own com1/com2/com3Select params, which only
+	// ever apply within the player's own group). Used e.g. by Deathmatch to
+	// force a specific boss character as the sole enemy on a milestone
+	// stage, or to re-roll an enemy pick that landed on a name it isn't
+	// allowed to be right now. heroDataVector/heroVector are parallel, kept
+	// in sync here.
+	void overrideHeroName(size_t index, const string &newName)
+	{
+		if (index >= heroDataVector.size())
+			return;
+		heroDataVector[index].name = newName;
+		if (index < heroVector.size())
+			heroVector[index] = newName;
 	}
 
 	// Warpper of game layer

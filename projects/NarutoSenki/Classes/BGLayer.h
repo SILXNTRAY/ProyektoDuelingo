@@ -6,7 +6,7 @@ class BGLayer : public Layer
 public:
 	Sprite *bgMap;
 
-	void initBg(int mapId);
+	void initBg(int mapId, bool isDuel = false);
 
 	CREATE_FUNC(BGLayer);
 };
