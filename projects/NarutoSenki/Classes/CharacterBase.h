@@ -247,6 +247,101 @@ public:
 	int				_spcAttackRangeY3;
 	uint32_t		_spcAttackCD3;
 
+	// Data-only extended skill slots (skillSPC6-20) -- no dedicated HUD
+	// button or click dispatch, same as skillSPC1-5 above. Available for
+	// character-specific mechanics that need combat stats (type/value/
+	// range/CD) beyond the original 5 special slots. See Hero.hpp's XML
+	// reading loop for how these get populated from the character's XML.
+	PROP_UInt(_spcAttackValue6,SpcAttackValue6);
+	PROP_REF(string,_spcAttackType6,SpcAttack6Type);
+	int				_spcAttackRangeX6;
+	int				_spcAttackRangeY6;
+	uint32_t		_spcAttackCD6;
+
+	PROP_UInt(_spcAttackValue7,SpcAttackValue7);
+	PROP_REF(string,_spcAttackType7,SpcAttack7Type);
+	int				_spcAttackRangeX7;
+	int				_spcAttackRangeY7;
+	uint32_t		_spcAttackCD7;
+
+	PROP_UInt(_spcAttackValue8,SpcAttackValue8);
+	PROP_REF(string,_spcAttackType8,SpcAttack8Type);
+	int				_spcAttackRangeX8;
+	int				_spcAttackRangeY8;
+	uint32_t		_spcAttackCD8;
+
+	PROP_UInt(_spcAttackValue9,SpcAttackValue9);
+	PROP_REF(string,_spcAttackType9,SpcAttack9Type);
+	int				_spcAttackRangeX9;
+	int				_spcAttackRangeY9;
+	uint32_t		_spcAttackCD9;
+
+	PROP_UInt(_spcAttackValue10,SpcAttackValue10);
+	PROP_REF(string,_spcAttackType10,SpcAttack10Type);
+	int				_spcAttackRangeX10;
+	int				_spcAttackRangeY10;
+	uint32_t		_spcAttackCD10;
+
+	PROP_UInt(_spcAttackValue11,SpcAttackValue11);
+	PROP_REF(string,_spcAttackType11,SpcAttack11Type);
+	int				_spcAttackRangeX11;
+	int				_spcAttackRangeY11;
+	uint32_t		_spcAttackCD11;
+
+	PROP_UInt(_spcAttackValue12,SpcAttackValue12);
+	PROP_REF(string,_spcAttackType12,SpcAttack12Type);
+	int				_spcAttackRangeX12;
+	int				_spcAttackRangeY12;
+	uint32_t		_spcAttackCD12;
+
+	PROP_UInt(_spcAttackValue13,SpcAttackValue13);
+	PROP_REF(string,_spcAttackType13,SpcAttack13Type);
+	int				_spcAttackRangeX13;
+	int				_spcAttackRangeY13;
+	uint32_t		_spcAttackCD13;
+
+	PROP_UInt(_spcAttackValue14,SpcAttackValue14);
+	PROP_REF(string,_spcAttackType14,SpcAttack14Type);
+	int				_spcAttackRangeX14;
+	int				_spcAttackRangeY14;
+	uint32_t		_spcAttackCD14;
+
+	PROP_UInt(_spcAttackValue15,SpcAttackValue15);
+	PROP_REF(string,_spcAttackType15,SpcAttack15Type);
+	int				_spcAttackRangeX15;
+	int				_spcAttackRangeY15;
+	uint32_t		_spcAttackCD15;
+
+	PROP_UInt(_spcAttackValue16,SpcAttackValue16);
+	PROP_REF(string,_spcAttackType16,SpcAttack16Type);
+	int				_spcAttackRangeX16;
+	int				_spcAttackRangeY16;
+	uint32_t		_spcAttackCD16;
+
+	PROP_UInt(_spcAttackValue17,SpcAttackValue17);
+	PROP_REF(string,_spcAttackType17,SpcAttack17Type);
+	int				_spcAttackRangeX17;
+	int				_spcAttackRangeY17;
+	uint32_t		_spcAttackCD17;
+
+	PROP_UInt(_spcAttackValue18,SpcAttackValue18);
+	PROP_REF(string,_spcAttackType18,SpcAttack18Type);
+	int				_spcAttackRangeX18;
+	int				_spcAttackRangeY18;
+	uint32_t		_spcAttackCD18;
+
+	PROP_UInt(_spcAttackValue19,SpcAttackValue19);
+	PROP_REF(string,_spcAttackType19,SpcAttack19Type);
+	int				_spcAttackRangeX19;
+	int				_spcAttackRangeY19;
+	uint32_t		_spcAttackCD19;
+
+	PROP_UInt(_spcAttackValue20,SpcAttackValue20);
+	PROP_REF(string,_spcAttackType20,SpcAttack20Type);
+	int				_spcAttackRangeX20;
+	int				_spcAttackRangeY20;
+	uint32_t		_spcAttackCD20;
+
 	PROP_UInt(_tempAttackValue1,TempAttackValue1);
 
 
@@ -398,6 +493,21 @@ public:
 	CCArray*			skillSPC3Array;
 	CCArray*			skillSPC4Array;
 	CCArray*			skillSPC5Array;
+	CCArray*			skillSPC6Array;
+	CCArray*			skillSPC7Array;
+	CCArray*			skillSPC8Array;
+	CCArray*			skillSPC9Array;
+	CCArray*			skillSPC10Array;
+	CCArray*			skillSPC11Array;
+	CCArray*			skillSPC12Array;
+	CCArray*			skillSPC13Array;
+	CCArray*			skillSPC14Array;
+	CCArray*			skillSPC15Array;
+	CCArray*			skillSPC16Array;
+	CCArray*			skillSPC17Array;
+	CCArray*			skillSPC18Array;
+	CCArray*			skillSPC19Array;
+	CCArray*			skillSPC20Array;
 
 
 	virtual void		dealloc();
