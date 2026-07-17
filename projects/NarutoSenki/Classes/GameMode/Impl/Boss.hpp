@@ -3,8 +3,12 @@
 
 // Duel (1 VS 1 Arena) mode — reuses the Boss slot.
 // Setup mirrors Mode1v1 (EXP/coin/CKR/level-up via changeHPbar x5),
-// then applies an explicit 3x HP multiplier on top of the levelled MaxHP.
-// No reborn: first death ends the match instantly.
+// then applies an explicit 2x HP multiplier on top of the levelled MaxHP.
+// Each side has 3 characters total (the initial pick + 2 companions in
+// _allyRoster/_enemyAllyRoster). A death eliminates that one character and
+// force-switches to the next living roster member (see
+// GameLayer::forceSwitchOnDeath) instead of ending the match outright —
+// the match only actually ends once a side has lost all 3.
 class ModeBoss : public IGameModeHandler
 {
 private:
@@ -100,14 +104,17 @@ public:
 						for (int i = 1; i < 6; i++)
 							hero->changeHPbar();
 
-						// Explicit 3x HP multiplier on top of the levelled MaxHP.
-						uint32_t newMaxHP = hero->getMaxHP() * 3;
+						// Explicit 2x HP multiplier on top of the levelled MaxHP.
+						uint32_t newMaxHP = hero->getMaxHP() * 2;
 						hero->setMaxHPValue(newMaxHP, false);
 						hero->setHPValue(newMaxHP, true);
 
 						hero->increaseAllCkrs(25000);
 
-						// No respawn — first death ends the duel.
+						// No auto-reborn — a death is instead handled by
+						// forceSwitchOnDeath below, which eliminates this
+						// character and swaps to the next living roster
+						// member, or ends the match if that was the last one.
 						hero->enableReborn = false;
 
 						if (hero->isPlayer())
@@ -129,8 +136,27 @@ public:
 		if (!c->isPlayerOrCom())
 			return;
 
-		// Win if the dead character was the enemy; lose if it was the player.
-		getGameLayer()->onGameOver(c->getGroup() != playerGroup);
+		// A hero mid-retirement (see CharacterBase::_isRetiring — switched
+		// away from, finishing its current action under AI before it
+		// despawns on its own) still passes isPlayerOrCom() even after
+		// setRole(Role::Com), so it needs to be told apart from the
+		// actually-active hero dying: it's not the character being played
+		// right now, and forceSwitchOnDeath would incorrectly treat this
+		// like an active-hero death (hijacking control via an unwanted
+		// force-switch and corrupting the roster — see
+		// eliminateInactiveHero's comment for the full explanation).
+		if (c->_isRetiring)
+		{
+			getGameLayer()->eliminateInactiveHero(c);
+			return;
+		}
+
+		// Used to end the match immediately here (getGameLayer()->
+		// onGameOver(...)) -- now a death only eliminates that one
+		// character and force-switches to the next living roster member.
+		// forceSwitchOnDeath itself calls onGameOver() for real once a
+		// side has lost all 3.
+		getGameLayer()->forceSwitchOnDeath(c);
 	}
 
 	void onCharacterReborn(CharacterBase* c)

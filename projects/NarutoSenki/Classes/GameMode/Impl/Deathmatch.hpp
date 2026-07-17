@@ -3,13 +3,23 @@
 #include "MyUtils/KTools.h"
 
 // Deathmatch — endless arcade mode. Mechanically this is just Boss (1v1
-// Duel Arena) mode: same setup (EXP/coin/CKR/level-up, 3x HP multiplier,
+// Duel Arena) mode: same setup (EXP/coin/CKR/level-up, 2x HP multiplier,
 // no gear, ally bench/swap), same arena rules (isDuelMode() covers both),
-// and the same win condition — kill the enemy once and the match ends.
+// and the same eliminate/force-switch duel model (see
+// GameLayer::forceSwitchOnDeath) — a single death eliminates that one
+// character and swaps to the next living roster member; a stage only
+// actually clears/ends once one side has lost all 3.
 // The "endless" part comes from GameOver's start_btn (Deathmatch-only),
 // which quick-restarts into the next stage with the same character
 // instead of returning to the menu. The stage streak is persisted to
-// SQLite on every win and reset to 0 on a loss or forfeit.
+// SQLite once a side is fully eliminated (see onSideEliminated below) --
+// win increments and saves it, loss resets it to 0.
+//
+// Every 10th stage (see isBossRound()) is a boss round: the enemy is
+// forced to be one of getBossList()'s reserved characters, gets no
+// allies at all, and has 5x HP instead of the usual 2x. Those reserved
+// names are excluded from ever showing up as a regular enemy or enemy
+// ally on non-boss stages, so the boss encounter stays a surprise.
 class ModeDeathmatch : public IGameModeHandler
 {
 private:
@@ -20,6 +30,24 @@ private:
 	// comments there for why these are staged here before GameLayer exists.
 	vector<string> _pendingAllyRoster;
 	vector<string> _pendingEnemyAllyRoster;
+
+	// Editable list of "boss enemy" characters — edit this to add/remove
+	// who's eligible to show up as the milestone boss (see isBossRound()
+	// below). These names are reserved: outside of an actual boss round,
+	// they're excluded from ever being picked as a regular enemy or enemy
+	// ally, so the boss encounter stays a surprise rather than something
+	// you might've already fought as a normal opponent.
+	static const vector<string>& getBossList()
+	{
+		static const vector<string> bossList = { "Orochimaru", "Itachi", "Pain" };
+		return bossList;
+	}
+
+	// Every 10th stage is a boss round.
+	bool isBossRound() const
+	{
+		return _stage % 10 == 0;
+	}
 
 public:
 	void init()
@@ -47,15 +75,56 @@ public:
 		if (selectLayer->_com2Select)
 			_pendingAllyRoster.push_back(selectLayer->_com2Select);
 
-		vector<string> used = _pendingAllyRoster;
-		for (const auto &h : getHerosArray())
-			used.push_back(h.name);
-
-		for (size_t i = 0; i < _pendingAllyRoster.size(); i++)
+		// initHeros() just picked the enemy (heroDataVector index 1 — index
+		// 0 is always the player in this 1-player/1-enemy setup) from the
+		// full random pool, which has no way to know about the boss list
+		// reservation. Fix that up here via overrideHeroName().
+		auto& bossList = getBossList();
+		if (isBossRound())
 		{
-			auto pick = getRandomHeroExceptAll(used);
-			_pendingEnemyAllyRoster.push_back(pick);
-			used.push_back(pick);
+			// Boss round: force the enemy to be a random pick FROM the
+			// boss list, and give it no allies at all (see onCharacterInit
+			// below for the 5x HP that goes with this).
+			setRand();
+			string boss = bossList[random((int)bossList.size())];
+			overrideHeroName(1, boss);
+		}
+		else
+		{
+			// Not a boss round — if the normal random pool happened to
+			// land on a reserved boss name anyway, re-roll it excluding
+			// the boss list (and the player's own picks, same reasoning
+			// as the exclusion set built for the enemy ally roster below).
+			string currentPick = getHerosArray().size() > 1 ? getHerosArray()[1].name : "";
+			bool pickedReservedBoss = std::find(bossList.begin(), bossList.end(), currentPick) != bossList.end();
+			if (pickedReservedBoss)
+			{
+				vector<string> excludeForReroll = bossList;
+				excludeForReroll.push_back(currentPick);
+				string rerolled = getRandomHeroExceptAll(excludeForReroll);
+				overrideHeroName(1, rerolled);
+			}
+		}
+
+		// Give the enemy AI a random bench the same size as the player's —
+		// symmetry only, no swap logic wired up for it yet. Exclude both
+		// duelists, anyone already on the player's bench, and the reserved
+		// boss list (see getBossList() above) so those never show up as a
+		// regular enemy ally either. Boss rounds skip this entirely — a
+		// boss enemy can't have allies.
+		if (!isBossRound())
+		{
+			vector<string> used = _pendingAllyRoster;
+			for (const auto &h : getHerosArray())
+				used.push_back(h.name);
+			used.insert(used.end(), bossList.begin(), bossList.end());
+
+			for (size_t i = 0; i < _pendingAllyRoster.size(); i++)
+			{
+				auto pick = getRandomHeroExceptAll(used);
+				_pendingEnemyAllyRoster.push_back(pick);
+				used.push_back(pick);
+			}
 		}
 
 		// Persist the current team so the mode select screen can offer to
@@ -86,8 +155,14 @@ public:
 			layer->_allyRoster = _pendingAllyRoster;
 			layer->_enemyAllyRoster = _pendingEnemyAllyRoster;
 
+			// Captured by value rather than calling isBossRound() from
+			// inside the lambda -- _stage (and therefore this) doesn't
+			// change mid-match, but this keeps the lambda's dependencies
+			// explicit and avoids capturing `this` unnecessarily.
+			bool isBoss = isBossRound();
+
 			layer->onHUDInitialized(
-				[layer]()
+				[layer, isBoss]()
 				{
 					if (!layer)
 						return;
@@ -98,11 +173,21 @@ public:
 						for (int i = 1; i < 6; i++)
 							hero->changeHPbar();
 
-						uint32_t newMaxHP = hero->getMaxHP() * 3;
+						// On a boss round, the enemy (the only non-player
+						// character present at this point -- boss rounds
+						// give the enemy no allies, see onInitHeros above)
+						// gets 5x instead of the usual 2x.
+						uint32_t multiplier = (isBoss && !hero->isPlayer()) ? 5 : 2;
+						uint32_t newMaxHP = hero->getMaxHP() * multiplier;
 						hero->setMaxHPValue(newMaxHP, false);
 						hero->setHPValue(newMaxHP, true);
 
 						hero->increaseAllCkrs(25000);
+
+						// No auto-reborn — a death is instead handled by
+						// forceSwitchOnDeath below, which eliminates this
+						// character and swaps to the next living roster
+						// member, or ends the stage if that was the last one.
 						hero->enableReborn = false;
 
 						if (hero->isPlayer())
@@ -124,24 +209,46 @@ public:
 		if (!c->isPlayerOrCom())
 			return;
 
-		if (c->getGroup() == playerGroup)
+		// Same distinction as Boss.hpp — a hero mid-retirement still
+		// passes isPlayerOrCom() but isn't the character actually being
+		// played right now; see eliminateInactiveHero's comment for why
+		// forceSwitchOnDeath would handle this incorrectly.
+		if (c->_isRetiring)
 		{
-			// Player died — run's over, reset the persisted streak.
-			KTools::saveDeathmatchStreak(0);
-			getGameLayer()->onGameOver(false);
+			getGameLayer()->eliminateInactiveHero(c);
 			return;
 		}
 
-		// Enemy died — that's the win condition, same as Boss mode. Persist
-		// the stage just cleared as the new streak and end the match; the
-		// GameOver screen's start_btn (Deathmatch-only) is what actually
-		// continues to the next stage, with the same retained character.
-		KTools::saveDeathmatchStreak(_stage);
-		getGameLayer()->onGameOver(true);
+		// Used to end the stage immediately here (a single kill/death) --
+		// now a death only eliminates that one character and force-switches
+		// to the next living roster member, same as Boss mode.
+		// forceSwitchOnDeath itself calls onSideEliminated() below (and
+		// then onGameOver()) once a side has lost all 3.
+		getGameLayer()->forceSwitchOnDeath(c);
 	}
 
 	void onCharacterReborn(CharacterBase *c)
 	{
+	}
+
+	// Fires once a side is fully eliminated (all 3 characters down) --
+	// the actual "stage over" moment now, instead of a single kill/death.
+	// See GameLayer::processPendingDeaths, which calls this right before
+	// onGameOver().
+	void onSideEliminated(bool isPlayerSide) override
+	{
+		if (isPlayerSide)
+		{
+			// Player's side is out — run's over, reset the persisted streak.
+			KTools::saveDeathmatchStreak(0);
+			return;
+		}
+
+		// Enemy's side is out — that's the win condition for this stage.
+		// Persist the stage just cleared as the new streak; the GameOver
+		// screen's start_btn (Deathmatch-only) is what actually continues
+		// to the next stage, with the same retained character.
+		KTools::saveDeathmatchStreak(_stage);
 	}
 
 	void onSurrender() override
@@ -166,6 +273,9 @@ private:
 		if (!layer || !layer->getHudLayer() || !layer->getHudLayer()->gameClock)
 			return;
 
-		layer->getHudLayer()->gameClock->setString(format("Stage {}", _stage).c_str());
+		if (isBossRound())
+			layer->getHudLayer()->gameClock->setString(format("Stage {} - BOSS", _stage).c_str());
+		else
+			layer->getHudLayer()->gameClock->setString(format("Stage {}", _stage).c_str());
 	}
 };
