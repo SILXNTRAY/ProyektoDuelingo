@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<unit>
+
+	<action name="Idle">
+		<data>
+			<p type="attackType">InkDragon</p>
+			<p type="attackValue">0</p>
+			<p type="attackRangeX">51</p>
+			<p type="attackRangeY">11</p>
+			<p type="cd">224</p>
+		</data>
+		<frame>
+			<f>OrochiIkazuchi_01</f>
+		</frame>
+	</action>
+
+	<action name="Walk">
+		<frame>
+			<f>OrochiIkazuchi_01</f>
+		</frame>
+	</action>
+
+	<action name="Hurt">
+		<frame>
+		</frame>
+	</action>
+
+	<action name="AirHurt">
+		<frame>
+
+		</frame>
+	</action>
+
+	<action name="KnockDown">
+		<frame>
+		</frame>
+	</action>
+
+	<action name="Float">
+		<frame>
+		</frame>
+	</action>
+
+	<action name="Dead">
+		<frame>	  
+		  <f>OrochiIkazuchi_01</f>
+		</frame>
+	</action>
+
+	<action name="nAttack">
+		<data>
+			<p type="attackType">aAttack</p>
+			<p type="attackValue">500</p>
+			<p type="attackRangeX">10</p>
+			<p type="attackRangeY">48</p>
+			<p type="cd">0</p>
+		</data>
+		<frame>
+			<f>OrochiIkazuchi_01</f>
+            <e type="setSound">Audio/Mitsuki/orochiIkazuchi.ogg</e>
+            <e type="setAttackBox">f_hit</e>            
+            <f>OrochiIkazuchi_02</f>
+            <e type="setAttackBox">ac_hit</e>            
+            <f>OrochiIkazuchi_03</f>
+            <e type="setAttackBox">ac_hit</e>            
+            <f>OrochiIkazuchi_04</f>
+            <e type="setAttackBox">ac_hit</e>            
+            <f>OrochiIkazuchi_01</f>
+            <e type="setAttackBox">ac_hit</e>         
+            <f>OrochiIkazuchi_02</f>
+            <e type="setAttackBox">ac_hit</e>           
+            <f>OrochiIkazuchi_03</f>
+            <e type="setAttackBox">ac_hit</e>            
+            <f>OrochiIkazuchi_04</f>
+            <e type="setAttackBox">ac_hit</e>            
+            <f>OrochiIkazuchi_01</f>
+            <e type="setAttackBox">ac_hit</e>           
+            <f>OrochiIkazuchi_02</f>
+            <e type="setAttackBox">ac_hit</e>         
+            <f>OrochiIkazuchi_03</f>
+            <e type="setAttackBox">ac_hit</e>            
+            <f>OrochiIkazuchi_04</f>
+            <e type="setAttackBox">ac_hit</e>            
+            <e type="setDetonation">0</e>
+		</frame>
+	</action>
+
+</unit>

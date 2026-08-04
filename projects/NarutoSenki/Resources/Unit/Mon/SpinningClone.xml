@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<unit>
+
+	<action name="Idle">
+		<data>
+			<p type="attackType">SpinningClone</p>
+			<p type="attackValue">0</p>
+			<p type="attackRangeX">51</p>
+			<p type="attackRangeY">11</p>
+			<p type="cd">224</p>
+		</data>
+		<frame>
+			<f>SpinningClone1</f>
+		</frame>
+	</action>
+
+	<action name="Walk">
+		<frame>
+			<f>SpinningClone1</f>
+		</frame>
+	</action>
+
+	<action name="Hurt">
+		<frame>
+		</frame>
+	</action>
+
+	<action name="AirHurt">
+		<frame>
+		</frame>
+	</action>
+
+	<action name="KnockDown">
+		<frame>
+		</frame>
+	</action>
+
+	<action name="Float">
+		<frame>
+		</frame>
+	</action>
+
+	<action name="Dead">
+		<frame>
+			<f>SpinningClone1</f>
+		</frame>
+	</action>
+
+	<action name="nAttack">
+		<data>
+			<p type="attackType">aAttack</p>
+			<p type="attackValue">237</p>
+			<p type="attackRangeX">32</p>
+			<p type="attackRangeY">96</p>
+			<p type="cd">0</p>
+		</data>
+		<frame>
+			<f>SpinningClone1</f>
+			<e type="setDelay">-5</e>
+			<e type="setSkillEffect">smk</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone2</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone3</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone4</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone5</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone6</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone7</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone8</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone9</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone10</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone11</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone12</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone13</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone14</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone15</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone16</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone17</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone18</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone19</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone20</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone21</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone22</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone23</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone24</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone25</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone26</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone27</f>
+			<e type="setDelay">-5</e>
+			<e type="setAttackBox">o_hit</e>
+			<f>SpinningClone28</f>
+			<e type="setDelay">-5</e>
+			<f>SpinningClone29</f>
+			<e type="setDelay">-5</e>
+			<e type="setSkillEffect">smk</e>
+			<e type="setDetonation">0</e>
+		</frame>
+	</action>
+
+</unit>
