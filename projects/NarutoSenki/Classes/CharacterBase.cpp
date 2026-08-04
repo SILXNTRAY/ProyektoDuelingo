@@ -3095,7 +3095,7 @@ void CharacterBase::setMon(const string &monName)
 	}
 	else if (monName == "SansyoRed")
 	{
-		monster->setPosition(Vec2(_isFlipped ? getPositionX() - 240 : getPositionX() + 240, getPositionY() - 32));
+		monster->setPosition(Vec2(_isFlipped ? getPositionX() - 180 : getPositionX() + 180, getPositionY() - 32));
 		monster->attack(NAttack);
 	}
 	else if (monName == "SansyoGreen")
@@ -3104,7 +3104,10 @@ void CharacterBase::setMon(const string &monName)
 		monster->attack(NAttack);
 	}
 	else if (monName == "SansyoBlue" ||
-		     monName == "RashomonRed")
+		     monName == "RashomonRed" ||
+			 monName == "SusanooBullet1" ||
+			 monName == "SusanooBullet2" ||
+			 monName == "FireTomado")
 	{
 		monster->setPosition(Vec2(_isFlipped ? getPositionX() - 48 : getPositionX() + 48, getPositionY() - 32 + 2));
 		monster->attack(NAttack);
@@ -3198,7 +3201,11 @@ void CharacterBase::setMon(const string &monName)
 			 monName == "Smoke" ||
 			 monName == "BannShou" ||
 			 monName == "Bull" ||
-			 monName == "Raintiger")
+			 monName == "Raintiger" ||
+			 monName == "RyhuenHouka" ||
+			 monName == "Fire" ||
+			 monName == "Fire2" ||
+			 monName == "Fire3")
 	{
 		_monsterArray.push_back(monster);
 		monster->attack(NAttack);
@@ -3300,7 +3307,8 @@ void CharacterBase::setMon(const string &monName)
 			getGameLayer()->getHudLayer()->skill1Button->setLock();
 		}
 	}
-	else if (monName == "InkDragon")
+	else if (monName == "InkDragon" ||
+			 monName == "Kazenano")
 	{
 		monster->setPosition(Vec2(_isFlipped ? getPositionX() - 128 : getPositionX() + 128, getPositionY()));
 		_monsterArray.push_back(monster);
@@ -3314,6 +3322,7 @@ void CharacterBase::setMon(const string &monName)
 	}
 	else if (monName == "FutonSRK3" ||
 		     monName == "OrochiIkazuchi" ||
+			 monName == "SpinningClone" ||
 			 monName == "FutonSRK4")
 	{
 	    monster->setPosition(Vec2(_isFlipped ? getPositionX() - 128 : getPositionX() + 128, getPositionY()));

@@ -255,7 +255,10 @@ void Monster::setAI(float dt)
 				charName != "Mine" &&
 				charName != "Traps" &&
 				charName != "Yominuma" &&
-				charName != "Tsukuyomi")
+				charName != "Tsukuyomi" &&
+				charName != "SusanooBullet1" &&
+				charName != "SusanooBullet2"
+				)
 			{
 				moveDirection = sp.getNormalized();
 

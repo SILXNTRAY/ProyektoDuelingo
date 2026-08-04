@@ -28,7 +28,7 @@ GameOver::~GameOver()
 	}
 }
 
-bool GameOver::init(RenderTexture *snapshoot)
+bool GameOver::init(RenderTexture* snapshoot)
 {
 	RETURN_FALSE_IF(!Layer::init());
 
@@ -156,7 +156,7 @@ void GameOver::listResult()
 			resultScore = ((killDead - ((_totalSecond / 60.0f - 10) * 4)) / 40) * 100;
 	}
 
-	if(_totalSecond < 1 * 60 + 5 && _isWin && !isDuelMode())
+	if (_totalSecond < 1 * 60 + 5 && _isWin && !isDuelMode())
 	{
 		SimpleAudioEngine::sharedEngine()->stopBackgroundMusic(true);
 		Director::sharedDirector()->end();
@@ -269,8 +269,16 @@ void GameOver::listResult()
 
 	if (Cheats < kMaxCheats)
 	{
-		// Verify that the game total kills is valid
-		if ((akatsukiKill + konohaKill) != getGameLayer()->getTotalKills())
+		// Verify that the game total kills is valid.
+		// Skipped for duel modes (Boss/Deathmatch): their roster-elimination
+		// system (see GameLayer::despawnDeadHero) permanently erases eliminated
+		// characters from _CharacterArray mid-match, so a kill scored by a
+		// character that later dies is counted in getTotalKills() (a running
+		// counter) but silently dropped from this sum (which only iterates
+		// characters still present in _CharacterArray). That's a legitimate,
+		// expected mismatch there -- not tampering -- so this check doesn't
+		// apply to those modes.
+		if (!isDuelMode() && (akatsukiKill + konohaKill) != getGameLayer()->getTotalKills())
 		{
 			SimpleAudioEngine::sharedEngine()->stopBackgroundMusic(true);
 			Director::sharedDirector()->end();
@@ -299,7 +307,7 @@ void GameOver::listResult()
 		adExtra->setPosition(Vec2(coinBG->getPositionX() + 70, coinBG->getPositionY() + 22));
 		addChild(adExtra, 7);
 
-		const char *extraCoin;
+		const char* extraCoin;
 		uint32_t tempCoin;
 		if (_isWin)
 		{
@@ -330,7 +338,7 @@ void GameOver::listResult()
 		addChild(rewardLabel, 7);
 	}
 
-	const char *imgSrc = nullptr;
+	const char* imgSrc = nullptr;
 	bool isEnableSROrBetter = getGameLayer()->_isHardCoreGame && getGameLayer()->_isRandomChar && !getGameLayer()->_enableGear;
 
 	if (_isWin)
@@ -402,79 +410,170 @@ void GameOver::listResult()
 
 			if (_isWin)
 			{
-				int winNum = KTools::readWinNumFromSQL(resultChar.c_str());
-				if (resultScore >= 140)
-					winNum += 3;
-				else if (resultScore >= 120)
-					winNum += 2;
-				else
-					winNum += 1;
+				GameMode mode = getGameMode();
+				CCLOG("[GameOver] _isWin=true mode=%d resultChar=%s tempTime=%s resultScore=%.2f",
+					(int)mode, resultChar.c_str(), tempTime.c_str(), resultScore);
 
-				auto realWin = std::to_string(winNum);
-				KTools::saveSQLite("CharRecord", "name", resultChar.c_str(), "column1", realWin, false);
-
-				if (getGameLayer()->_isRandomChar && resultScore >= 120)
+				if (mode == GameMode::Deathmatch)
 				{
-					if (currPlayer->_isControlled)
-					{
-						currPlayer->_isControlled = false;
-						currPlayer->changeGroup();
-					}
-
-					for (auto hero : getGameLayer()->_CharacterArray)
-					{
-						if (hero->isClone() ||
-							hero->isPlayer() ||
-							hero->isSummon() ||
-							hero->isKugutsu() ||
-							hero->isGuardian())
-						{
-							continue;
-						}
-
-						if (hero->_isControlled)
-						{
-							hero->_isControlled = false;
-							hero->changeGroup();
-						}
-
-						if (hero->getGroup() == currPlayer->getGroup())
-						{
-							int winNum2 = KTools::readWinNumFromSQL(hero->getName().c_str());
-							if (resultScore >= 140)
-								winNum2 += 2;
-							else
-								winNum2 += 1;
-
-							auto realWin2 = std::to_string(winNum2);
-							KTools::saveSQLite("CharRecord", "name", hero->getName().c_str(), "column1", realWin2, false);
-						}
-					}
+					CCLOG("[GameOver] Deathmatch branch - no win/time save here, handled in ModeDeathmatch::onSideEliminated");
 				}
-
-				auto bestTime = KTools::readSQLite("CharRecord", "name", resultChar.c_str(), "column3");
-				if (!isDuelMode())
+				else if (mode == GameMode::Boss)
 				{
-					if (bestTime.empty())
+					CCLOG("[GameOver] Boss branch - reading duel record time for %s", resultChar.c_str());
+					auto bestDuelTime = KTools::readDuelRecordTime(resultChar.c_str());
+					CCLOG("[GameOver] bestDuelTime='%s' (len=%d) empty=%d", bestDuelTime.c_str(), (int)bestDuelTime.length(), (int)bestDuelTime.empty());
+
+					if (bestDuelTime.empty())
 					{
-						KTools::saveSQLite("CharRecord", "name", resultChar.c_str(), "column3", tempTime, false);
+						CCLOG("[GameOver] no existing duel record, saving tempTime=%s for %s", tempTime.c_str(), resultChar.c_str());
+						KTools::saveDuelRecordTime(resultChar.c_str(), tempTime);
+						CCLOG("[GameOver] saveDuelRecordTime returned");
 					}
 					else
 					{
-						int recordHour = to_int(bestTime.substr(0, 2).c_str());
-						int recordMinute = to_int(bestTime.substr(3, 2).c_str());
-						int recordSecond = to_int(bestTime.substr(6, 2).c_str());
-
-						int recordTime = recordHour * 60 * 60 + recordMinute * 60 + recordSecond;
-						int currentTime = getGameLayer()->_minute * 60 + getGameLayer()->_second;
-						bool isNewRecord = currentTime < recordTime;
-
-						if (isNewRecord)
+						CCLOG("[GameOver] about to substr bestDuelTime='%s' len=%d", bestDuelTime.c_str(), (int)bestDuelTime.length());
+						if (bestDuelTime.length() < 8)
 						{
-							KTools::saveSQLite("CharRecord", "name", resultChar.c_str(), "column3", tempTime, false);
+							CCLOG("[GameOver] WARNING bestDuelTime too short (%d chars), skipping substr to avoid crash", (int)bestDuelTime.length());
+						}
+						else
+						{
+							int recordHour = to_int(bestDuelTime.substr(0, 2).c_str());
+							int recordMinute = to_int(bestDuelTime.substr(3, 2).c_str());
+							int recordSecond = to_int(bestDuelTime.substr(6, 2).c_str());
+							CCLOG("[GameOver] parsed record h=%d m=%d s=%d", recordHour, recordMinute, recordSecond);
+
+							int recordTime = recordHour * 60 * 60 + recordMinute * 60 + recordSecond;
+							int currentTime = getGameLayer()->_minute * 60 + getGameLayer()->_second;
+							bool isNewRecord = currentTime < recordTime;
+							CCLOG("[GameOver] recordTime=%d currentTime=%d isNewRecord=%d", recordTime, currentTime, (int)isNewRecord);
+
+							if (isNewRecord)
+							{
+								CCLOG("[GameOver] saving new duel record tempTime=%s for %s", tempTime.c_str(), resultChar.c_str());
+								KTools::saveDuelRecordTime(resultChar.c_str(), tempTime);
+								CCLOG("[GameOver] saveDuelRecordTime returned");
+							}
 						}
 					}
+					CCLOG("[GameOver] Boss branch complete");
 				}
+				else
+				{
+					CCLOG("[GameOver] Normal/story branch - reading win num for %s", resultChar.c_str());
+					int winNum = KTools::readWinNumFromSQL(resultChar.c_str());
+					if (resultScore >= 140)
+						winNum += 3;
+					else if (resultScore >= 120)
+						winNum += 2;
+					else
+						winNum += 1;
+
+					auto realWin = std::to_string(winNum);
+					CCLOG("[GameOver] saving winNum=%s for %s", realWin.c_str(), resultChar.c_str());
+					KTools::saveSQLite("CharRecord", "name", resultChar.c_str(), "column1", realWin, false);
+					CCLOG("[GameOver] winNum save returned");
+
+					// This win count feeds RegularWins unlock rules (e.g.
+					// Kabuto unlocking off Orochimaru wins) -- check now
+					// that it's been persisted.
+					UnlockRequirements::tryUnlockViaProgress();
+
+					if (getGameLayer()->_isRandomChar && resultScore >= 120)
+					{
+						CCLOG("[GameOver] entering random-char team win-share loop");
+						if (currPlayer->_isControlled)
+						{
+							currPlayer->_isControlled = false;
+							currPlayer->changeGroup();
+						}
+
+						for (auto hero : getGameLayer()->_CharacterArray)
+						{
+							if (hero->isClone() ||
+								hero->isPlayer() ||
+								hero->isSummon() ||
+								hero->isKugutsu() ||
+								hero->isGuardian())
+							{
+								continue;
+							}
+
+							if (hero->_isControlled)
+							{
+								hero->_isControlled = false;
+								hero->changeGroup();
+							}
+
+							if (hero->getGroup() == currPlayer->getGroup())
+							{
+								CCLOG("[GameOver] team-share: reading win num for %s", hero->getName().c_str());
+								int winNum2 = KTools::readWinNumFromSQL(hero->getName().c_str());
+								if (resultScore >= 140)
+									winNum2 += 2;
+								else
+									winNum2 += 1;
+
+								auto realWin2 = std::to_string(winNum2);
+								CCLOG("[GameOver] team-share: saving winNum2=%s for %s", realWin2.c_str(), hero->getName().c_str());
+								KTools::saveSQLite("CharRecord", "name", hero->getName().c_str(), "column1", realWin2, false);
+							}
+						}
+						CCLOG("[GameOver] random-char team win-share loop complete");
+
+						// Team-share saved column1 for other heroes too --
+						// re-check for any newly-satisfied RegularWins rules.
+						UnlockRequirements::tryUnlockViaProgress();
+					}
+
+					// Story-mode best time (column3) -- isDuelMode() (Boss +
+					// Deathmatch) is already fully handled in the branches
+					// above, so this is unconditional now.
+					CCLOG("[GameOver] reading column3 best time for %s", resultChar.c_str());
+					auto bestTime = KTools::readSQLite("CharRecord", "name", resultChar.c_str(), "column3");
+					CCLOG("[GameOver] bestTime='%s' (len=%d) empty=%d", bestTime.c_str(), (int)bestTime.length(), (int)bestTime.empty());
+
+					if (bestTime.empty())
+					{
+						CCLOG("[GameOver] no existing column3 time, saving tempTime=%s for %s", tempTime.c_str(), resultChar.c_str());
+						KTools::saveSQLite("CharRecord", "name", resultChar.c_str(), "column3", tempTime, false);
+						CCLOG("[GameOver] column3 save returned");
+					}
+					else
+					{
+						CCLOG("[GameOver] about to substr bestTime='%s' len=%d", bestTime.c_str(), (int)bestTime.length());
+						if (bestTime.length() < 8)
+						{
+							CCLOG("[GameOver] WARNING bestTime too short (%d chars), skipping substr to avoid crash", (int)bestTime.length());
+						}
+						else
+						{
+							int recordHour = to_int(bestTime.substr(0, 2).c_str());
+							int recordMinute = to_int(bestTime.substr(3, 2).c_str());
+							int recordSecond = to_int(bestTime.substr(6, 2).c_str());
+							CCLOG("[GameOver] parsed column3 record h=%d m=%d s=%d", recordHour, recordMinute, recordSecond);
+
+							int recordTime = recordHour * 60 * 60 + recordMinute * 60 + recordSecond;
+							int currentTime = getGameLayer()->_minute * 60 + getGameLayer()->_second;
+							bool isNewRecord = currentTime < recordTime;
+							CCLOG("[GameOver] recordTime=%d currentTime=%d isNewRecord=%d", recordTime, currentTime, (int)isNewRecord);
+
+							if (isNewRecord)
+							{
+								CCLOG("[GameOver] saving new column3 time tempTime=%s for %s", tempTime.c_str(), resultChar.c_str());
+								KTools::saveSQLite("CharRecord", "name", resultChar.c_str(), "column3", tempTime, false);
+								CCLOG("[GameOver] column3 save returned");
+							}
+						}
+					}
+					CCLOG("[GameOver] Normal/story branch complete");
+				}
+				CCLOG("[GameOver] _isWin block fully complete");
+			}
+			else
+			{
+				CCLOG("[GameOver] _isWin=false, skipping all record saves");
 			}
 		}
 	}
@@ -485,15 +584,15 @@ void GameOver::listResult()
 	version->setScale(0.3f);
 	addChild(version, 5);
 
-	MenuItem *btm_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("close_btn1.png"), Sprite::createWithSpriteFrameName("close_btn2.png"), nullptr, this, menu_selector(GameOver::onBackToMenu));
-	Menu *overMenu = Menu::create(btm_btn, nullptr);
+	MenuItem* btm_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("close_btn1.png"), Sprite::createWithSpriteFrameName("close_btn2.png"), nullptr, this, menu_selector(GameOver::onBackToMenu));
+	Menu* overMenu = Menu::create(btm_btn, nullptr);
 	overMenu->setPosition(Vec2(winSize.width / 2 + result_bg->getContentSize().width / 2 - 12, winSize.height / 2 + result_bg->getContentSize().height / 2 - 18));
 	addChild(overMenu, 7);
 
 	if (getGameMode() == GameMode::Deathmatch)
 	{
 		start_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("start_btn.png"), Sprite::createWithSpriteFrameName("start_btn.png"), nullptr, this, menu_selector(GameOver::onStartNextStage));
-		Menu *startMenu = Menu::create(start_btn, nullptr);
+		Menu* startMenu = Menu::create(start_btn, nullptr);
 		startMenu->setAnchorPoint(Vec2(1, 0));
 		startMenu->setPosition(Vec2(winSize.width / 2 + result_bg->getContentSize().width / 2 - 12, winSize.height / 2 - result_bg->getContentSize().height / 2 + 12));
 		addChild(startMenu, 7);
@@ -504,13 +603,13 @@ void GameOver::listResult()
 	getGameModeHandler()->onGameOver();
 }
 
-void GameOver::onUPloadBtn(Ref *sender)
+void GameOver::onUPloadBtn(Ref* sender)
 {
 	auto tip = CCTips::create("ServerMainten");
 	addChild(tip, 5000);
 }
 
-void GameOver::onStartNextStage(Ref *sender)
+void GameOver::onStartNextStage(Ref* sender)
 {
 	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/confirm.ogg");
 
@@ -551,7 +650,7 @@ void GameOver::onStartNextStage(Ref *sender)
 	Director::sharedDirector()->popScene();
 }
 
-void GameOver::onBackToMenu(Ref *sender)
+void GameOver::onBackToMenu(Ref* sender)
 {
 	if (!exitLayer)
 	{
@@ -567,10 +666,10 @@ void GameOver::onBackToMenu(Ref *sender)
 		auto btm_text = Sprite::createWithSpriteFrameName("btm_text.png");
 		btm_text->setPosition(Vec2(winSize.width / 2, winSize.height / 2 + 8));
 
-		MenuItem *yes_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("yes_btn1.png"), Sprite::createWithSpriteFrameName("yes_btn2.png"), this, menu_selector(GameOver::onLeft));
-		MenuItem *no_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("no_btn1.png"), Sprite::createWithSpriteFrameName("no_btn2.png"), this, menu_selector(GameOver::onCancel));
+		MenuItem* yes_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("yes_btn1.png"), Sprite::createWithSpriteFrameName("yes_btn2.png"), this, menu_selector(GameOver::onLeft));
+		MenuItem* no_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("no_btn1.png"), Sprite::createWithSpriteFrameName("no_btn2.png"), this, menu_selector(GameOver::onCancel));
 
-		Menu *confirm_menu = Menu::create(yes_btn, no_btn, nullptr);
+		Menu* confirm_menu = Menu::create(yes_btn, no_btn, nullptr);
 		confirm_menu->alignItemsHorizontallyWithPadding(24);
 		confirm_menu->setPosition(Vec2(winSize.width / 2, winSize.height / 2 - 30));
 
@@ -582,7 +681,7 @@ void GameOver::onBackToMenu(Ref *sender)
 	}
 }
 
-void GameOver::onLeft(Ref *sender)
+void GameOver::onLeft(Ref* sender)
 {
 	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/confirm.ogg");
 
@@ -590,16 +689,16 @@ void GameOver::onLeft(Ref *sender)
 	Director::sharedDirector()->popScene();
 }
 
-void GameOver::onCancel(Ref *sender)
+void GameOver::onCancel(Ref* sender)
 {
 	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/cancel.ogg");
 	exitLayer->removeFromParent();
 	exitLayer = nullptr;
 }
 
-GameOver *GameOver::create(RenderTexture *snapshoot)
+GameOver* GameOver::create(RenderTexture* snapshoot)
 {
-	GameOver *pl = new GameOver();
+	GameOver* pl = new GameOver();
 	if (pl && pl->init(snapshoot))
 	{
 		pl->autorelease();

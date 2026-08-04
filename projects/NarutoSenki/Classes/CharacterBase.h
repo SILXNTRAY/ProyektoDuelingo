@@ -312,36 +312,6 @@ public:
 	int				_spcAttackRangeY15;
 	uint32_t		_spcAttackCD15;
 
-	PROP_UInt(_spcAttackValue16,SpcAttackValue16);
-	PROP_REF(string,_spcAttackType16,SpcAttack16Type);
-	int				_spcAttackRangeX16;
-	int				_spcAttackRangeY16;
-	uint32_t		_spcAttackCD16;
-
-	PROP_UInt(_spcAttackValue17,SpcAttackValue17);
-	PROP_REF(string,_spcAttackType17,SpcAttack17Type);
-	int				_spcAttackRangeX17;
-	int				_spcAttackRangeY17;
-	uint32_t		_spcAttackCD17;
-
-	PROP_UInt(_spcAttackValue18,SpcAttackValue18);
-	PROP_REF(string,_spcAttackType18,SpcAttack18Type);
-	int				_spcAttackRangeX18;
-	int				_spcAttackRangeY18;
-	uint32_t		_spcAttackCD18;
-
-	PROP_UInt(_spcAttackValue19,SpcAttackValue19);
-	PROP_REF(string,_spcAttackType19,SpcAttack19Type);
-	int				_spcAttackRangeX19;
-	int				_spcAttackRangeY19;
-	uint32_t		_spcAttackCD19;
-
-	PROP_UInt(_spcAttackValue20,SpcAttackValue20);
-	PROP_REF(string,_spcAttackType20,SpcAttack20Type);
-	int				_spcAttackRangeX20;
-	int				_spcAttackRangeY20;
-	uint32_t		_spcAttackCD20;
-
 	PROP_UInt(_tempAttackValue1,TempAttackValue1);
 
 
@@ -503,11 +473,6 @@ public:
 	CCArray*			skillSPC13Array;
 	CCArray*			skillSPC14Array;
 	CCArray*			skillSPC15Array;
-	CCArray*			skillSPC16Array;
-	CCArray*			skillSPC17Array;
-	CCArray*			skillSPC18Array;
-	CCArray*			skillSPC19Array;
-	CCArray*			skillSPC20Array;
 
 
 	virtual void		dealloc();

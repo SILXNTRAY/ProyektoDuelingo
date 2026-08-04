@@ -105,19 +105,19 @@ void LoadLayer::preloadIMG()
 
 	if (_isHardCoreMode)
 	{
-		addSprites(kGuardian_Han);
-		addSprites(kGuardian_Roshi);
+		addSpritesAlias(kGuardian_Han);
+		addSpritesAlias(kGuardian_Roshi);
 		KTools::prepareFileOGG(GuardianEnum::Han);
 		KTools::prepareFileOGG(GuardianEnum::Roshi);
 	}
-	addSprites(kFlog_Kotetsu);
-	addSprites(kFlog_FemalePain);
+	addSpritesAlias(kFlog_Kotetsu);
+	addSpritesAlias(kFlog_FemalePain);
 
-	addSprites(kFlog_Izumo);
-	addSprites(kFlog_Kakashi);
+	addSpritesAlias(kFlog_Izumo);
+	addSpritesAlias(kFlog_Kakashi);
 
-	addSprites(kFlog_Pain);
-	addSprites(kFlog_Obito);
+	addSpritesAlias(kFlog_Pain);
+	addSpritesAlias(kFlog_Obito);
 
 	KTools::prepareFileOGG("Effect");
 	KTools::prepareFileOGG("Ougis");
@@ -145,78 +145,78 @@ void LoadLayer::perloadCharIMG(const string& name)
 
 	auto path = format("Unit/Ninja/{}/{}_Skill.plist", name, name);
 	if (FileUtils::sharedFileUtils()->isFileExist(path.c_str()))
-		addSprites(path);
+		addSpritesAlias(path);
 	// else
 	// CCLOG("Not found file %s", path);
 
 	KTools::prepareFileOGG(name);
 
 	path = format("Unit/Ninja/{}/{}.plist", name, name);
-	addSprites(path);
+	addSpritesAlias(path);
 	// Add extra sprites
 	if (name == HeroEnum::Jiraiya)
 	{
-		addSprites(mk_ninja_plist("SageJiraiya"));
+		addSpritesAlias(mk_ninja_plist("SageJiraiya"));
 		KTools::prepareFileOGG(HeroEnum::SageJiraiya);
 	}
 	else if (name == HeroEnum::Kankuro)
 	{
-		addSprites(mk_kugutsu_plist("Karasu"));
-		addSprites(mk_kugutsu_plist("Sanshouuo"));
-		addSprites(mk_kugutsu_plist("Saso"));
+		addSpritesAlias(mk_kugutsu_plist("Karasu"));
+		addSpritesAlias(mk_kugutsu_plist("Sanshouuo"));
+		addSpritesAlias(mk_kugutsu_plist("Saso"));
 	}
 	else if (name == HeroEnum::Chiyo)
 	{
-		addSprites(mk_kugutsu_plist("Parents"));
+		addSpritesAlias(mk_kugutsu_plist("Parents"));
 	}
 	else if (name == HeroEnum::Kakuzu)
 	{
-		addSprites(mk_kugutsu_plist("MaskRaiton"));
-		addSprites(mk_kugutsu_plist("MaskFuton"));
-		addSprites(mk_kugutsu_plist("MaskKaton"));
+		addSpritesAlias(mk_kugutsu_plist("MaskRaiton"));
+		addSpritesAlias(mk_kugutsu_plist("MaskFuton"));
+		addSpritesAlias(mk_kugutsu_plist("MaskKaton"));
 	}
 	else if (name == HeroEnum::Naruto)
 	{
-		addSprites(mk_ninja_plist("RikudoNaruto"));
-		addSprites(mk_ninja_plist("SageNaruto"));
-		addSprites(mk_kuchiyose_plist("Kurama"));
+		addSpritesAlias(mk_ninja_plist("RikudoNaruto"));
+		addSpritesAlias(mk_ninja_plist("SageNaruto"));
+		addSpritesAlias(mk_kuchiyose_plist("Kurama"));
 		KTools::prepareFileOGG(HeroEnum::SageNaruto);
 		KTools::prepareFileOGG(HeroEnum::RikudoNaruto);
 	}
 	else if (name == HeroEnum::Lee)
 	{
-		addSprites(mk_ninja_plist("RockLee"));
+		addSpritesAlias(mk_ninja_plist("RockLee"));
 	}
 	else if (name == HeroEnum::Tsunade)
 	{
-		addSprites(mk_kuchiyose_plist("Slug"));
+		addSpritesAlias(mk_kuchiyose_plist("Slug"));
 	}
 	else if (name == HeroEnum::Kakashi)
 	{
-		addSprites(mk_kuchiyose_plist("DogWall"));
+		addSpritesAlias(mk_kuchiyose_plist("DogWall"));
 	}
 	else if (name == HeroEnum::Deidara)
 	{
-		addSprites(mk_kuchiyose_plist("Centipede"));
+		addSpritesAlias(mk_kuchiyose_plist("Centipede"));
 	}
 	else if (name == HeroEnum::Pain)
 	{
-		addSprites(mk_ninja_plist("AnimalPath"));
-		addSprites(mk_ninja_plist("AsuraPath"));
-		addSprites(mk_ninja_plist("NarakaPath"));
-		// addSprites(mk_ninja_plist("HumanPath"));
-		// addSprites(mk_ninja_plist("PertaPath"));
-		addSprites(mk_ninja_plist("Nagato"));
+		addSpritesAlias(mk_ninja_plist("AnimalPath"));
+		addSpritesAlias(mk_ninja_plist("AsuraPath"));
+		addSpritesAlias(mk_ninja_plist("NarakaPath"));
+		// addSpritesAlias(mk_ninja_plist("HumanPath"));
+		// addSpritesAlias(mk_ninja_plist("PertaPath"));
+		addSpritesAlias(mk_ninja_plist("Nagato"));
 		KTools::prepareFileOGG(HeroEnum::Nagato);
 	}
 	else if (name == HeroEnum::Sasuke)
 	{
-		addSprites(mk_ninja_plist("ImmortalSasuke"));
+		addSpritesAlias(mk_ninja_plist("ImmortalSasuke"));
 		KTools::prepareFileOGG(HeroEnum::ImmortalSasuke);
 	}
 	else if (name == HeroEnum::Kiba)
 	{
-		addSprites(mk_kuchiyose_plist("Akamaru"));
+		addSpritesAlias(mk_kuchiyose_plist("Akamaru"));
 	}
 }
 
@@ -287,8 +287,8 @@ void LoadLayer::unloadCharIMG(CharacterBase* c)
 		removeSprites(mk_ninja_plist("AnimalPath"));
 		removeSprites(mk_ninja_plist("AsuraPath"));
 		removeSprites(mk_ninja_plist("NarakaPath"));
-		// addSprites(mk_ninja_plist("HumanPath"));
-		// addSprites(mk_ninja_plist("PertaPath"));
+		// addSpritesAlias(mk_ninja_plist("HumanPath"));
+		// addSpritesAlias(mk_ninja_plist("PertaPath"));
 		removeSprites(mk_ninja_plist("Nagato"));
 	}
 	else if (name == HeroEnum::Nagato)

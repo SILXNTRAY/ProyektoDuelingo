@@ -18,7 +18,7 @@ bool enableCustomSelect = false;
 init MenuButton ;
 ----------------------*/
 
-bool MenuButton::init(const char *szImage)
+bool MenuButton::init(const char* szImage)
 {
 	RETURN_FALSE_IF(!Sprite::init());
 
@@ -58,7 +58,7 @@ CCRect MenuButton::getRect()
 	return CCRect(0, 0, size.width, size.height);
 }
 
-bool MenuButton::containsTouchLocation(Touch *touch)
+bool MenuButton::containsTouchLocation(Touch* touch)
 {
 	return getRect().containsPoint(convertTouchToNodeSpace(touch));
 }
@@ -73,7 +73,7 @@ MenuButtonType MenuButton::getBtnType()
 	return _type;
 }
 
-bool MenuButton::ccTouchBegan(Touch *touch, Event *event)
+bool MenuButton::ccTouchBegan(Touch* touch, Event* event)
 {
 	// touch area
 	if (!containsTouchLocation(touch))
@@ -86,7 +86,7 @@ bool MenuButton::ccTouchBegan(Touch *touch, Event *event)
 	return true;
 }
 
-void MenuButton::ccTouchMoved(Touch *touch, Event *event)
+void MenuButton::ccTouchMoved(Touch* touch, Event* event)
 {
 	// touch area
 	if (prePosY == 0)
@@ -113,7 +113,7 @@ void MenuButton::ccTouchMoved(Touch *touch, Event *event)
 	}
 }
 
-void MenuButton::ccTouchEnded(Touch *touch, Event *event)
+void MenuButton::ccTouchEnded(Touch* touch, Event* event)
 {
 	if (_isTop && !_startMenu->isDrag)
 	{
@@ -175,7 +175,7 @@ void MenuButton::playSound()
 	}
 }
 
-MenuButton *MenuButton::create(const char *szImage)
+MenuButton* MenuButton::create(const char* szImage)
 {
 	auto mb = new MenuButton();
 	if (mb && mb->init(szImage))
@@ -215,26 +215,25 @@ bool StartMenu::init()
 
 	// Vec2 origin = Director::sharedDirector()->getVisibleOrigin();
 
-	// Sprite* bgSprite = Sprite::create("red_bg.png");
-	////pSprite->setPosition(Vec2(winSize.width/2 + origin.x, winSize.height/2 + origin.y));
-	// FULL_SCREEN_SPRITE(bgSprite);
-	// bgSprite->setAnchorPoint(Vec2(0,0));
-	// bgSprite->setPosition(Vec2(0,0));
-	// addChild(bgSprite, -5);
+	Sprite* bgSprite = Sprite::create("background.png");
+	FULL_SCREEN_SPRITE(bgSprite);
+	bgSprite->setAnchorPoint(Vec2(0, 0));
+	bgSprite->setPosition(Vec2(0, 0));
+	addChild(bgSprite, -5);
 
 	// produce groud
-	Sprite *gold_left = Sprite::createWithSpriteFrameName("gold_left.png");
+	Sprite* gold_left = Sprite::createWithSpriteFrameName("gold_left.png");
 	gold_left->setAnchorPoint(Vec2(0, 0));
 	gold_left->setPosition(Vec2(0, 20));
 	addChild(gold_left, 1);
 
-	Sprite *gold_right = Sprite::createWithSpriteFrameName("gold_right.png");
+	Sprite* gold_right = Sprite::createWithSpriteFrameName("gold_right.png");
 	gold_right->setAnchorPoint(Vec2(0, 1));
 	gold_right->setPosition(Vec2(winSize.width - gold_right->getContentSize().width - 20, winSize.height - 20));
 	addChild(gold_right, 1);
 
 	// produce the cloud
-	Sprite *cloud_left = Sprite::createWithSpriteFrameName("cloud.png");
+	Sprite* cloud_left = Sprite::createWithSpriteFrameName("cloud.png");
 	cloud_left->setPosition(Vec2(0, 15));
 	cloud_left->setFlipX(true);
 	cloud_left->setFlipY(true);
@@ -245,9 +244,9 @@ bool StartMenu::init()
 	auto cseq1 = RepeatForever::create(newSequence(cmv1, cmv1->reverse()));
 	cloud_left->runAction(cseq1);
 
-	Sprite *cloud_right = Sprite::createWithSpriteFrameName("cloud.png");
+	Sprite* cloud_right = Sprite::createWithSpriteFrameName("cloud.png");
 	cloud_right->setPosition(Vec2(winSize.width - cloud_right->getContentSize().width,
-								  winSize.height - (cloud_right->getContentSize().height + 15)));
+		winSize.height - (cloud_right->getContentSize().height + 15)));
 	cloud_right->setAnchorPoint(Vec2(0, 0));
 	addChild(cloud_right, 1);
 
@@ -256,18 +255,18 @@ bool StartMenu::init()
 	cloud_right->runAction(cseq2);
 
 	// produce the menu_bar
-	Sprite *menu_bar_b = Sprite::create("menu_bar2.png");
+	Sprite* menu_bar_b = Sprite::create("menu_bar2.png");
 	menu_bar_b->setAnchorPoint(Vec2(0, 0));
 	FULL_SCREEN_SPRITE(menu_bar_b);
 	addChild(menu_bar_b, 2);
 
-	Sprite *menu_bar_t = Sprite::create("menu_bar3.png");
+	Sprite* menu_bar_t = Sprite::create("menu_bar3.png");
 	menu_bar_t->setAnchorPoint(Vec2(0, 0));
 	menu_bar_t->setPosition(Vec2(0, winSize.height - menu_bar_t->getContentSize().height));
 	FULL_SCREEN_SPRITE(menu_bar_t);
 	addChild(menu_bar_t, 2);
 
-	Sprite *startmenu_title = Sprite::createWithSpriteFrameName("startmenu_title.png");
+	Sprite* startmenu_title = Sprite::createWithSpriteFrameName("startmenu_title.png");
 	startmenu_title->setAnchorPoint(Vec2(0, 0));
 	startmenu_title->setPosition(Vec2(2, winSize.height - startmenu_title->getContentSize().height - 2));
 	addChild(startmenu_title, 3);
@@ -318,14 +317,14 @@ bool StartMenu::init()
 	versionLabel->setPosition(winSize.width - 25, 10);
 	addChild(versionLabel, 5);
 
-	Sprite *avator = Sprite::createWithSpriteFrameName("avator1.png");
+	Sprite* avator = Sprite::createWithSpriteFrameName("avator1.png");
 	avator->setAnchorPoint(Vec2(0, 0));
 	avator->setOpacity(0);
 	avator->setPosition(Vec2(winSize.width - avator->getContentSize().width, 19));
 	addChild(avator, 1);
 
-	Vector<SpriteFrame *> frames;
-	Vector<FiniteTimeAction *> list;
+	Vector<SpriteFrame*> frames;
+	Vector<FiniteTimeAction*> list;
 	int i = 0;
 	while (++i < 5)
 	{
@@ -343,8 +342,8 @@ bool StartMenu::init()
 	}
 
 	avator->runAction(RepeatForever::create(Sequence::create(list)));
-	MenuItem *news_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("news_btn.png"), nullptr, this, menu_selector(StartMenu::onNewsBtn));
-	Menu *menu = Menu::create(news_btn, nullptr);
+	MenuItem* news_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("news_btn.png"), nullptr, this, menu_selector(StartMenu::onNewsBtn));
+	Menu* menu = Menu::create(news_btn, nullptr);
 	news_btn->setAnchorPoint(Vec2(0, 0.5f));
 	menu->setPosition(15, winSize.height - 50);
 	addChild(menu, 5);
@@ -352,7 +351,7 @@ bool StartMenu::init()
 	setNotice();
 
 	login_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("login_btn.png"), nullptr, this, menu_selector(StartMenu::onLoginBtn));
-	Menu *menu2 = Menu::create(login_btn, nullptr);
+	Menu* menu2 = Menu::create(login_btn, nullptr);
 	login_btn->setAnchorPoint(Vec2(1, 0.5f));
 	menu2->setPosition(winSize.width - 15, winSize.height - 50);
 	addChild(menu2, 5);
@@ -381,7 +380,7 @@ void StartMenu::onExit()
 	// otherwise newly started BGM can be cut off when StartMenu exits.
 }
 
-void StartMenu::onLoginBtn(Ref *sender)
+void StartMenu::onLoginBtn(Ref* sender)
 {
 	auto tip = CCTips::create("ServerMainten");
 	addChild(tip, 5000);
@@ -390,7 +389,7 @@ void StartMenu::onLoginBtn(Ref *sender)
 
 void StartMenu::update(float dt)
 {
-	if(!noticeLabel){
+	if (!noticeLabel) {
 		return;
 	}
 
@@ -399,10 +398,10 @@ void StartMenu::update(float dt)
 	float lableX = noticeLabel->getContentSize().width;
 
 
-	if(noticeLabel->getPositionX()>=-lableX){
-		noticeLabel->setPositionX(noticeLabel->getPositionX()-0.6f);
-	}	
-	else{
+	if (noticeLabel->getPositionX() >= -lableX) {
+		noticeLabel->setPositionX(noticeLabel->getPositionX() - 0.6f);
+	}
+	else {
 		noticeLabel->setPositionX(190);
 	}
 }
@@ -412,18 +411,18 @@ void StartMenu::setNotice()
 	if (!notice_layer)
 	{
 		notice_layer = Layer::create();
-		Sprite *notice_bg = Sprite::createWithSpriteFrameName("notice_bg.png");
+		Sprite* notice_bg = Sprite::createWithSpriteFrameName("notice_bg.png");
 		notice_bg->setAnchorPoint(Vec2(0, 0));
 		notice_bg->setPosition(Vec2(15, 228));
 		notice_layer->addChild(notice_bg);
 
-		ClippingNode *clipper = ClippingNode::create();
-		Node *stencil = Sprite::createWithSpriteFrameName("notice_mask.png");
+		ClippingNode* clipper = ClippingNode::create();
+		Node* stencil = Sprite::createWithSpriteFrameName("notice_mask.png");
 		stencil->setAnchorPoint(Vec2(0, 0));
 		clipper->setStencil(stencil);
 
 		auto strings = CCDictionary::createWithContentsOfFile("Config/strings.xml");
-		auto reply = ((CCString *)strings->objectForKey("Notice"))->m_sString.c_str();
+		auto reply = ((CCString*)strings->objectForKey("Notice"))->m_sString.c_str();
 
 		noticeLabel = CCLabelTTF::create(reply, FONT_NAME, 12);
 		noticeLabel->setAnchorPoint(Vec2(0, 0));
@@ -436,7 +435,7 @@ void StartMenu::setNotice()
 	}
 }
 
-void StartMenu::onNewsBtn(Ref *sender)
+void StartMenu::onNewsBtn(Ref* sender)
 {
 #if CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID
 
@@ -458,7 +457,7 @@ void StartMenu::onNewsBtn(Ref *sender)
 #endif
 }
 
-void StartMenu::onHardCoreOn(Ref *sender)
+void StartMenu::onHardCoreOn(Ref* sender)
 {
 	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/confirm.ogg");
 	if (hardCoreLayer)
@@ -469,7 +468,7 @@ void StartMenu::onHardCoreOn(Ref *sender)
 	}
 }
 
-void StartMenu::onHardCoreOff(Ref *sender)
+void StartMenu::onHardCoreOff(Ref* sender)
 {
 	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/cancel.ogg");
 	if (hardCoreLayer)
@@ -488,19 +487,19 @@ void StartMenu::onHardLayerCallBack()
 		{
 			hardCoreLayer = Layer::create();
 
-			Sprite *confirm_bg = Sprite::createWithSpriteFrameName("confirm_bg.png");
+			Sprite* confirm_bg = Sprite::createWithSpriteFrameName("confirm_bg.png");
 			confirm_bg->setPosition(Vec2(winSize.width / 2, winSize.height / 2));
 
-			Sprite *hardcore_title = Sprite::createWithSpriteFrameName("hardcore_title.png");
+			Sprite* hardcore_title = Sprite::createWithSpriteFrameName("hardcore_title.png");
 			hardcore_title->setPosition(Vec2(winSize.width / 2, winSize.height / 2 + 38));
 
-			Sprite *hardcore_text = Sprite::createWithSpriteFrameName("hardcore_text.png");
+			Sprite* hardcore_text = Sprite::createWithSpriteFrameName("hardcore_text.png");
 			hardcore_text->setPosition(Vec2(winSize.width / 2, winSize.height / 2 + 8));
 
-			MenuItem *yes_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("yes_btn1.png"), Sprite::createWithSpriteFrameName("yes_btn2.png"), this, menu_selector(StartMenu::onHardCoreOn));
-			MenuItem *no_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("no_btn1.png"), Sprite::createWithSpriteFrameName("no_btn2.png"), this, menu_selector(StartMenu::onHardCoreOff));
+			MenuItem* yes_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("yes_btn1.png"), Sprite::createWithSpriteFrameName("yes_btn2.png"), this, menu_selector(StartMenu::onHardCoreOn));
+			MenuItem* no_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("no_btn1.png"), Sprite::createWithSpriteFrameName("no_btn2.png"), this, menu_selector(StartMenu::onHardCoreOff));
 
-			Menu *confirm_menu = Menu::create(yes_btn, no_btn, nullptr);
+			Menu* confirm_menu = Menu::create(yes_btn, no_btn, nullptr);
 			confirm_menu->alignItemsHorizontallyWithPadding(24);
 			confirm_menu->setPosition(Vec2(winSize.width / 2, winSize.height / 2 - 30));
 
@@ -526,8 +525,8 @@ void StartMenu::onTrainingCallBack()
 void StartMenu::onCreditsCallBack()
 {
 	SimpleAudioEngine::sharedEngine()->stopBackgroundMusic();
-	Scene *creditsScene = Scene::create();
-	CreditsLayer *creditsLayer = CreditsLayer::create();
+	Scene* creditsScene = Scene::create();
+	CreditsLayer* creditsLayer = CreditsLayer::create();
 	creditsScene->addChild(creditsLayer);
 	Director::sharedDirector()->replaceScene(TransitionFade::create(1.25f, creditsScene));
 }
