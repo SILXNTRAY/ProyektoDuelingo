@@ -30,9 +30,38 @@ public:
 	static int readCoinFromSQL();
 	static string readRecordTimeFromSQL(const char* heroName);
 
+	// Duel (Boss / 1v1 Duel Arena) best-time persistence, per hero.
+	// Stored as its own CharRecord column ("duel_time") so it doesn't
+	// collide with the story-mode best time already kept in column3.
+	static string readDuelRecordTime(const char *heroName);
+	static void saveDuelRecordTime(const char *heroName, const string &time);
+
 	// Deathmatch (endless arcade) win-streak persistence.
 	static int readDeathmatchStreak();
 	static void saveDeathmatchStreak(int streak);
+
+	// Deathmatch (endless arcade) best-ever round/streak record, per hero,
+	// stored alongside column1 (win count) on CharRecord -- separate from
+	// the current streak above (which resets to 0 on loss).
+	static int readArcadeRecordRound(const char *heroName);
+	static void saveArcadeRecordRoundIfBetter(const char *heroName, int round);
+
+	// Unlocked-character persistence: a dedicated table, one row per hero,
+	// seeded (all locked) the first time the DB is created, mirroring how
+	// CharRecord is seeded in initTableInDB().
+	static void ensureUnlockedCharTable();
+	static bool isCharacterUnlocked(const char *heroName);
+	static void unlockCharacter(const char *heroName);
+	static void lockCharacter(const char *heroName);
+
+	// Thin wrappers around UnlockRequirements (MyUtils/UnlockRequirements.hpp)
+	// so the rule-aware unlock checks/actions are callable from Lua the same
+	// way everything else here is -- tolua can only bind class static
+	// methods, not a free-standing namespace, hence the forwarding.
+	static bool isHeroUnlocked(const char *heroName);
+	static bool isHeroUnlockEligible(const char *heroName);
+	static bool tryUnlockHeroViaPurchase(const char *heroName);
+
 
 	// Deathmatch last-used team (main pick + up to 2 bench allies), so the
 	// mode-select screen can offer to resume it instead of picking fresh.

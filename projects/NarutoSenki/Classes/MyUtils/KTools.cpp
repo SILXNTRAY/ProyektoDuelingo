@@ -1,5 +1,6 @@
 #include "KTools.h"
 #include "MyUtils/CMD5Checksum.h"
+#include "MyUtils/UnlockRequirements.hpp"
 #include "Utils/Cocos2dxHelper.hpp"
 #if (CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID)
 #include "../../../cocos2dx/platform/android/jni/JniHelper.h"
@@ -362,14 +363,27 @@ string KTools::readSQLite(const char* table, const char* column, const char* val
 		string target;
 		for (int i = col; i < (row + 1) * col; i += col)
 		{
+			if (result[i] == nullptr)
+				continue;
+
 			string str = result[i];
 			decode(str);
 			CCLOG("[readSQLite] i=%d decoded=%s match=%d", i, str.c_str(), (int)(str == value));
 			if (str == value)
 			{
-				target = result[i + 1];
-				decode(target);
-				CCLOG("[readSQLite] FOUND target=%s", target.c_str());
+				if (result[i + 1] != nullptr)
+				{
+					target = result[i + 1];
+					decode(target);
+					CCLOG("[readSQLite] FOUND target=%s", target.c_str());
+				}
+				else
+				{
+					// Cell is NULL -- typically a column added via
+					// "alter table" after this row already existed.
+					// Leave target empty rather than dereferencing null.
+					CCLOG("[readSQLite] FOUND row but target column is NULL");
+				}
 				break;
 			}
 		}
@@ -378,7 +392,8 @@ string KTools::readSQLite(const char* table, const char* column, const char* val
 			CCLOG("[readSQLite] WARNING no match for value=%s", value);
 
 		if (!is_same(targetColumn, "column3") &&
-			!is_same(targetColumn, "column4"))
+			!is_same(targetColumn, "column4") &&
+			!is_same(targetColumn, "duel_time"))
 		{
 			target = std::to_string(to_int(target.c_str()));
 		}
@@ -413,14 +428,23 @@ void KTools::saveSQLite(const char* table, const char* relatedColumn, const char
 		string columnValue;
 		for (int i = col; i < (row + 1) * col; i += col)
 		{
+			if (result[i] == nullptr)
+				continue;
+
 			string str = result[i];
 			decode(str);
 			CCLOG("[saveSQLite] i=%d decoded=%s match=%d", i, str.c_str(), (int)(str == value));
 			if (str == value)
 			{
 				columnValue = result[i];
-				target = result[i + 1];
-				decode(target);
+				if (result[i + 1] != nullptr)
+				{
+					target = result[i + 1];
+					decode(target);
+				}
+				// else: target column is NULL for this row (e.g. a column
+				// added via "alter table" after this row already existed)
+				// -- leave target empty rather than dereferencing null.
 				CCLOG("[saveSQLite] FOUND columnValue(raw)=%s target=%s", columnValue.c_str(), target.c_str());
 				break;
 			}
@@ -494,6 +518,40 @@ string KTools::readRecordTimeFromSQL(const char* heroName)
 	return readSQLite("CharRecord", "name", heroName, "column3");
 }
 
+static void ensureDuelTimeColumn(sqlite3* pDB)
+{
+	// Same lazy-alter pattern as ensureDeathmatchStreakColumn: ignore the
+	// error if the column already exists.
+	char* errorMsg = nullptr;
+	string sql = "alter table CharRecord add column duel_time char(10)";
+	sqlite3_exec(pDB, sql.c_str(), nullptr, nullptr, &errorMsg);
+}
+
+string KTools::readDuelRecordTime(const char* heroName)
+{
+	sqlite3* pDB = prepareTableInDB();
+	if (pDB == nullptr)
+		return "";
+
+	ensureDuelTimeColumn(pDB);
+	sqlite3_close(pDB);
+
+	return readSQLite("CharRecord", "name", heroName, "duel_time");
+}
+
+void KTools::saveDuelRecordTime(const char* heroName, const string& time)
+{
+	sqlite3* pDB = prepareTableInDB();
+	if (pDB == nullptr)
+		return;
+
+	ensureDuelTimeColumn(pDB);
+	sqlite3_close(pDB);
+
+	saveSQLite("CharRecord", "name", heroName, "duel_time", time, false);
+}
+
+
 static void ensureDeathmatchStreakColumn(sqlite3* pDB)
 {
 	// Lazily add the column the first time it's needed -- ignore the error
@@ -549,6 +607,45 @@ void KTools::saveDeathmatchStreak(int streak)
 	sqlite3_exec(pDB, sql.c_str(), nullptr, nullptr, &errorMsg);
 
 	sqlite3_close(pDB);
+}
+
+static void ensureArcadeRecordColumn(sqlite3* pDB)
+{
+	// Per-hero, so it lives on CharRecord alongside column1 (win count) --
+	// same lazy-alter pattern as the rest of these "ensure column" helpers.
+	char* errorMsg = nullptr;
+	string sql = "alter table CharRecord add column arcade_record char(20)";
+	sqlite3_exec(pDB, sql.c_str(), nullptr, nullptr, &errorMsg);
+}
+
+int KTools::readArcadeRecordRound(const char* heroName)
+{
+	sqlite3* pDB = prepareTableInDB();
+	if (pDB == nullptr)
+		return 0;
+
+	ensureArcadeRecordColumn(pDB);
+	sqlite3_close(pDB);
+
+	auto value = readSQLite("CharRecord", "name", heroName, "arcade_record");
+	return to_int(value.c_str());
+}
+
+void KTools::saveArcadeRecordRoundIfBetter(const char* heroName, int round)
+{
+	// Mirrors saveDeathmatchStreak, but only ever overwrites with a higher
+	// value -- this is the per-hero "record", not the live/current streak.
+	if (round <= readArcadeRecordRound(heroName))
+		return;
+
+	sqlite3* pDB = prepareTableInDB();
+	if (pDB == nullptr)
+		return;
+
+	ensureArcadeRecordColumn(pDB);
+	sqlite3_close(pDB);
+
+	saveSQLite("CharRecord", "name", heroName, "arcade_record", std::to_string(round), false);
 }
 
 static void ensureDeathmatchTeamColumn(sqlite3* pDB)
@@ -620,6 +717,92 @@ bool KTools::readDeathmatchTeam(string& playerChar, string& ally1, string& ally2
 	sqlite3_free_table(result);
 	sqlite3_close(pDB);
 	return found;
+}
+
+void KTools::ensureUnlockedCharTable()
+{
+	sqlite3* pDB = prepareTableInDB();
+	if (pDB == nullptr)
+		return;
+
+	char* errorMsg = nullptr;
+	string sql = "create table if not exists UnlockedChar (name char(20) primary key, unlocked char(10))";
+	sqlite3_exec(pDB, sql.c_str(), nullptr, nullptr, &errorMsg);
+
+	sqlite3_close(pDB);
+}
+
+bool KTools::isCharacterUnlocked(const char* heroName)
+{
+	ensureUnlockedCharTable();
+
+	// No row at all means this hero was never gated (or hasn't been
+	// touched by unlockCharacter yet) -- rather than pre-seeding every
+	// hero in the roster as "locked" (which would incorrectly gate
+	// everyone), an absent row is treated as unlocked. Callers that
+	// actually want to gate a hero go through
+	// UnlockRequirements::isUnlocked(), which only ever calls this for
+	// heroes that have a real unlock rule in the first place.
+	auto value = readSQLite("UnlockedChar", "name", heroName, "unlocked");
+	if (value.empty())
+		return true;
+
+	return to_int(value.c_str()) != 0;
+}
+
+static void upsertUnlockedCharRow(const char* heroName, const char* unlockedValue)
+{
+	sqlite3* pDB = KTools::prepareTableInDB();
+	if (pDB == nullptr)
+		return;
+
+	auto existing = KTools::readSQLite("UnlockedChar", "name", heroName, "unlocked");
+	if (existing.empty())
+	{
+		string name = heroName;
+		int key = rand() % 50 + 40;
+		KTools::encode(name, key);
+
+		string unlockedDB = unlockedValue;
+		key = rand() % 60 + 40;
+		KTools::encode(unlockedDB, key);
+
+		char* errorMsg = nullptr;
+		string sql = format("insert into UnlockedChar values('{}','{}')", name, unlockedDB);
+		sqlite3_exec(pDB, sql.c_str(), nullptr, nullptr, &errorMsg);
+		sqlite3_close(pDB);
+		return;
+	}
+
+	sqlite3_close(pDB);
+	KTools::saveSQLite("UnlockedChar", "name", heroName, "unlocked", unlockedValue, false);
+}
+
+void KTools::unlockCharacter(const char* heroName)
+{
+	ensureUnlockedCharTable();
+	upsertUnlockedCharRow(heroName, "1");
+}
+
+void KTools::lockCharacter(const char* heroName)
+{
+	ensureUnlockedCharTable();
+	upsertUnlockedCharRow(heroName, "0");
+}
+
+bool KTools::isHeroUnlocked(const char* heroName)
+{
+	return UnlockRequirements::isUnlocked(heroName);
+}
+
+bool KTools::isHeroUnlockEligible(const char* heroName)
+{
+	return UnlockRequirements::isEligible(heroName);
+}
+
+bool KTools::tryUnlockHeroViaPurchase(const char* heroName)
+{
+	return UnlockRequirements::tryUnlockViaPurchase(heroName);
 }
 
 string KTools::encodeData(string data)

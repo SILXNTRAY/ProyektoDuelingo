@@ -32,7 +32,7 @@ bool GameModeLayer::init()
 	FULL_SCREEN_SPRITE(menu_bar_t);
 	addChild(menu_bar_t, 2);
 
-	auto modemenu_title = Sprite::createWithSpriteFrameName("startmenu_title.png");
+	auto modemenu_title = Sprite::createWithSpriteFrameName("gamemode_title.png");
 	modemenu_title->setAnchorPoint(Vec2(0, 0));
 	modemenu_title->setPosition(Vec2(2, winSize.height - modemenu_title->getContentSize().height - 2));
 	addChild(modemenu_title, 3);
@@ -96,7 +96,7 @@ bool GameModeLayer::init()
 
 	// init return button
 	auto return_img = MenuItemSprite::create(Sprite::create("UI/return_btn.png"), nullptr, nullptr, this, menu_selector(GameModeLayer::backToMenu));
-	Menu *return_btn = Menu::create(return_img, nullptr);
+	Menu* return_btn = Menu::create(return_img, nullptr);
 	return_btn->setAnchorPoint(Vec2(1, 0.5f));
 	return_btn->setPosition(winSize.width - 38, 65);
 	addChild(return_btn, 5);
@@ -104,7 +104,7 @@ bool GameModeLayer::init()
 	return Layer::init();
 }
 
-void GameModeLayer::backToMenu(Ref *sender)
+void GameModeLayer::backToMenu(Ref* sender)
 {
 	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/cancel.ogg");
 
@@ -120,43 +120,43 @@ void GameModeLayer::initModeData()
 	auto lang = Application::sharedApplication()->getCurrentLanguage();
 	if (lang == LanguageType::kLanguageChinese)
 	{
-		modes[GameMode::OneVsOne] = {"1 VS 1", ""};
-		modes[GameMode::Classic] = {"3 VS 3", "经典模式"};
-		modes[GameMode::FourVsFour] = {"4 VS 4", ""};
-		modes[GameMode::HardCore_4Vs4] = {"硬核模式 (4 VS 4)", "禁用装备"};
-		modes[GameMode::Boss] = {"决斗模式 (1 VS 1)", ""};
-		modes[GameMode::Clone] = {"克隆模式 (3 VS 3)", ""};
-		modes[GameMode::Deathmatch] = {"死亡竞赛 (无尽 1 VS 1)", ""};
-		modes[GameMode::RandomDeathmatch] = {"随机死亡竞赛 (3 VS 3)", ""};
+		modes[GameMode::OneVsOne] = { "1 VS 1", "" };
+		modes[GameMode::Classic] = { "3 VS 3", "经典模式" };
+		modes[GameMode::FourVsFour] = { "4 VS 4", "" };
+		modes[GameMode::HardCore_4Vs4] = { "硬核模式 (4 VS 4)", "禁用装备" };
+		modes[GameMode::Boss] = { "决斗模式 (1 VS 1)", "" };
+		modes[GameMode::Clone] = { "克隆模式 (3 VS 3)", "" };
+		modes[GameMode::Deathmatch] = { "死亡竞赛 (无尽 1 VS 1)", "" };
+		modes[GameMode::RandomDeathmatch] = { "随机死亡竞赛 (3 VS 3)", "" };
 	}
 	else // English
 	{
-		modes[GameMode::OneVsOne] = {"1 VS 1", ""};
-		modes[GameMode::Classic] = {"3 VS 3", "Classic Mode"};
-		modes[GameMode::FourVsFour] = {"4 VS 4", ""};
-		modes[GameMode::HardCore_4Vs4] = {"HardCore (4 VS 4)", "Disabled gear"};
-		modes[GameMode::Boss] = {"Duel (1 VS 1 Arena)", ""};
-		modes[GameMode::Clone] = {"Clone (3 VS 3)", ""};
-		modes[GameMode::Deathmatch] = {"Deathmatch (Endless 1 VS 1)", ""};
-		modes[GameMode::RandomDeathmatch] = {"Random Deathmatch (3 VS 3)", ""};
+		modes[GameMode::OneVsOne] = { "1 VS 1", "" };
+		modes[GameMode::Classic] = { "3 VS 3", "Classic Mode" };
+		modes[GameMode::FourVsFour] = { "4 VS 4", "" };
+		modes[GameMode::HardCore_4Vs4] = { "HardCore (4 VS 4)", "Disabled gear" };
+		modes[GameMode::Boss] = { "Duel (1 VS 1 Arena)", "" };
+		modes[GameMode::Clone] = { "Clone (3 VS 3)", "" };
+		modes[GameMode::Deathmatch] = { "Deathmatch (Endless 1 VS 1)", "" };
+		modes[GameMode::RandomDeathmatch] = { "Random Deathmatch (3 VS 3)", "" };
 	}
 
 	// init mode handlers
 	for (size_t i = 0; i < GameMode::__Internal_Max_Length; i++)
 	{
-		auto &data = modes.at(i);
+		auto& data = modes.at(i);
 		if (data.isLocked)
 			data.description += " (In developtment)";
 		// data.handler = s_ModeHandlers[i];
 	}
 }
 
-bool GameModeLayer::pushMode(const GameModeData &data)
+bool GameModeLayer::pushMode(const GameModeData& data)
 {
 	return true;
 }
 
-void GameModeLayer::removeMode(const GameModeData &data)
+void GameModeLayer::removeMode(const GameModeData& data)
 {
 }
 
@@ -217,7 +217,7 @@ void GameModeLayer::enterMode(GameMode mode)
 	handler->init();
 }
 
-void GameModeLayer::showDeathmatchContinuePrompt(const string &playerChar, const string &ally1, const string &ally2)
+void GameModeLayer::showDeathmatchContinuePrompt(const string& playerChar, const string& ally1, const string& ally2)
 {
 	_dmSavedPlayer = playerChar;
 	_dmSavedAlly1 = ally1;
@@ -234,16 +234,16 @@ void GameModeLayer::showDeathmatchContinuePrompt(const string &playerChar, const
 	auto bg = Sprite::createWithSpriteFrameName("confirm_bg.png");
 	bg->setPosition(Vec2(winSize.width / 2, winSize.height / 2));
 
-	auto title = Sprite::createWithSpriteFrameName("confirm_title.png");
+	auto title = Sprite::createWithSpriteFrameName("arcade_title.png");
 	title->setPosition(Vec2(winSize.width / 2, winSize.height / 2 + 38));
 
-	auto text = Sprite::createWithSpriteFrameName("btm_text.png");
+	auto text = Sprite::createWithSpriteFrameName("arcade_text.png");
 	text->setPosition(Vec2(winSize.width / 2, winSize.height / 2 + 8));
 
-	MenuItem *yes_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("yes_btn1.png"), Sprite::createWithSpriteFrameName("yes_btn2.png"), this, menu_selector(GameModeLayer::onDeathmatchContinueYes));
-	MenuItem *no_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("no_btn1.png"), Sprite::createWithSpriteFrameName("no_btn2.png"), this, menu_selector(GameModeLayer::onDeathmatchContinueNo));
+	MenuItem* yes_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("yes_btn1.png"), Sprite::createWithSpriteFrameName("yes_btn2.png"), this, menu_selector(GameModeLayer::onDeathmatchContinueYes));
+	MenuItem* no_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("no_btn1.png"), Sprite::createWithSpriteFrameName("no_btn2.png"), this, menu_selector(GameModeLayer::onDeathmatchContinueNo));
 
-	Menu *confirm_menu = Menu::create(yes_btn, no_btn, nullptr);
+	Menu* confirm_menu = Menu::create(yes_btn, no_btn, nullptr);
 	confirm_menu->alignItemsHorizontallyWithPadding(24);
 	confirm_menu->setPosition(Vec2(winSize.width / 2, winSize.height / 2 - 30));
 
@@ -254,7 +254,7 @@ void GameModeLayer::showDeathmatchContinuePrompt(const string &playerChar, const
 	addChild(dmPromptLayer, 500);
 }
 
-void GameModeLayer::onDeathmatchContinueYes(Ref *sender)
+void GameModeLayer::onDeathmatchContinueYes(Ref* sender)
 {
 	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/confirm.ogg");
 	dmPromptLayer->removeFromParent();
@@ -297,7 +297,7 @@ void GameModeLayer::onDeathmatchContinueYes(Ref *sender)
 	Director::sharedDirector()->replaceScene(TransitionFade::create(1.0f, loadScene));
 }
 
-void GameModeLayer::onDeathmatchContinueNo(Ref *sender)
+void GameModeLayer::onDeathmatchContinueNo(Ref* sender)
 {
 	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/cancel.ogg");
 	dmPromptLayer->removeFromParent();
@@ -310,7 +310,7 @@ void GameModeLayer::onDeathmatchContinueNo(Ref *sender)
 
 bool GameModeLayer::setSelect(GameMode mode)
 {
-	auto &data = modes.at(mode);
+	auto& data = modes.at(mode);
 	if (!data.isLocked && data.hasSelected)
 		return true;
 

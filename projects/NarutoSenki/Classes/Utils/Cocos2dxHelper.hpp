@@ -35,52 +35,52 @@ using namespace std;
 
 namespace LuaBridge
 {
-static inline bool isReady()
-{
-	return LuaEngine::defaultEngine() != nullptr && LuaEngine::defaultEngine()->getLuaStack() != nullptr;
-}
-
-static inline bool hasGlobalFunction(lua_State *L, const char *funcName)
-{
-	lua_getglobal(L, funcName);
-	if (!lua_isfunction(L, -1))
+	static inline bool isReady()
 	{
-		lua_pop(L, 1);
-		return false;
-	}
-	return true;
-}
-
-static inline bool callGlobalNoArgs(const char *funcName, const char *context = nullptr)
-{
-	if (!isReady())
-	{
-		CCLOG("[LuaBridge] Lua engine not ready when calling %s", funcName ? funcName : "<null>");
-		return false;
+		return LuaEngine::defaultEngine() != nullptr && LuaEngine::defaultEngine()->getLuaStack() != nullptr;
 	}
 
-	lua_getL;
-	if (!funcName || !hasGlobalFunction(L, funcName))
+	static inline bool hasGlobalFunction(lua_State* L, const char* funcName)
 	{
-		CCLOG("[LuaBridge] Lua global function not found: %s (context: %s)",
-			  funcName ? funcName : "<null>",
-			  context ? context : "none");
-		return false;
+		lua_getglobal(L, funcName);
+		if (!lua_isfunction(L, -1))
+		{
+			lua_pop(L, 1);
+			return false;
+		}
+		return true;
 	}
 
-	if (lua_pcall(L, 0, 0, 0) != LUA_OK)
+	static inline bool callGlobalNoArgs(const char* funcName, const char* context = nullptr)
 	{
-		const char *error = lua_tostring(L, -1);
-		CCLOG("[LuaBridge] Failed to call %s (context: %s), error: %s",
-			  funcName,
-			  context ? context : "none",
-			  error ? error : "<no error>");
-		lua_pop(L, 1);
-		return false;
-	}
+		if (!isReady())
+		{
+			CCLOG("[LuaBridge] Lua engine not ready when calling %s", funcName ? funcName : "<null>");
+			return false;
+		}
 
-	return true;
-}
+		lua_getL;
+		if (!funcName || !hasGlobalFunction(L, funcName))
+		{
+			CCLOG("[LuaBridge] Lua global function not found: %s (context: %s)",
+				funcName ? funcName : "<null>",
+				context ? context : "none");
+			return false;
+		}
+
+		if (lua_pcall(L, 0, 0, 0) != LUA_OK)
+		{
+			const char* error = lua_tostring(L, -1);
+			CCLOG("[LuaBridge] Failed to call %s (context: %s), error: %s",
+				funcName,
+				context ? context : "none",
+				error ? error : "<no error>");
+			lua_pop(L, 1);
+			return false;
+		}
+
+		return true;
+	}
 } // namespace LuaBridge
 
 #define lua_call_func(func_name) LuaBridge::callGlobalNoArgs(func_name, __FUNCTION__)
@@ -107,17 +107,99 @@ static inline bool callGlobalNoArgs(const char *funcName, const char *context = 
 #define FULL_SCREEN_SPRITE(__SPRITE__) \
 	__SPRITE__->setScaleX(winSize.width / __SPRITE__->getContentSize().width);
 
-static inline void addSprites(const string &plistName)
+static inline void addSprites(const string& plistName)
 {
 	SpriteFrameCache::sharedSpriteFrameCache()->addSpriteFramesWithFile(plistName.c_str());
+	CCLOG("[addSprites][C++] loading: %s", plistName.c_str());
+
+	// Explicitly force Antialias (GL_LINEAR) on this plist's texture rather
+	// than relying on it being left untouched at engine default. Resolves
+	// the texture the same way CCSpriteFrameCache does internally (via
+	// metadata.textureFileName, falling back to same-name .png), so this
+	// hits the exact cached CCTexture2D the frames were just registered
+	// against.
+	string fullPath = FileUtils::sharedFileUtils()->fullPathForFilename(plistName.c_str());
+	CCDictionary* dict = CCDictionary::createWithContentsOfFileThreadSafe(fullPath.c_str());
+	if (dict)
+	{
+		string texturePath;
+		CCDictionary* metadataDict = (CCDictionary*)dict->objectForKey("metadata");
+		if (metadataDict)
+		{
+			const CCString* texKey = metadataDict->valueForKey("textureFileName");
+			if (texKey)
+				texturePath = texKey->getCString();
+		}
+
+		if (!texturePath.empty())
+		{
+			texturePath = FileUtils::sharedFileUtils()->fullPathFromRelativeFile(texturePath.c_str(), plistName.c_str());
+		}
+		else
+		{
+			texturePath = plistName;
+			size_t startPos = texturePath.find_last_of(".");
+			texturePath = texturePath.erase(startPos).append(".png");
+		}
+
+		dict->release();
+
+		Texture2D* texture = TextureCache::sharedTextureCache()->addImage(texturePath.c_str());
+		CCLOG("[addSprites][C++] plist=%s resolvedTexturePath=%s texture=%p", plistName.c_str(), texturePath.c_str(), texture);
+		if (texture)
+			texture->setAntiAliasTexParameters();
+	}
 }
 
-static inline void removeSprites(const string &plistName)
+// Loads a plist's sprite frames like addSprites(), then forces its backing
+// texture to Alias (GL_NEAREST) instead of the engine default Antialias
+// (GL_LINEAR). Use only for plists whose art has no antialiasing baked in
+// (currently: everything under Unit/Ninja/<Character>/<Character>.plist and
+// <Character>_Skill.plist).
+static inline void addSpritesAlias(const string& plistName)
+{
+	addSprites(plistName);
+
+	string fullPath = FileUtils::sharedFileUtils()->fullPathForFilename(plistName.c_str());
+	CCDictionary* dict = CCDictionary::createWithContentsOfFileThreadSafe(fullPath.c_str());
+	if (!dict)
+		return;
+
+	// Mirrors CCSpriteFrameCache::addSpriteFramesWithFile's texture path
+	// resolution so we look up the exact same cached CCTexture2D.
+	string texturePath;
+	CCDictionary* metadataDict = (CCDictionary*)dict->objectForKey("metadata");
+	if (metadataDict)
+	{
+		const CCString* texKey = metadataDict->valueForKey("textureFileName");
+		if (texKey)
+			texturePath = texKey->getCString();
+	}
+
+	if (!texturePath.empty())
+	{
+		texturePath = FileUtils::sharedFileUtils()->fullPathFromRelativeFile(texturePath.c_str(), plistName.c_str());
+	}
+	else
+	{
+		texturePath = plistName;
+		size_t startPos = texturePath.find_last_of(".");
+		texturePath = texturePath.erase(startPos).append(".png");
+	}
+
+	dict->release();
+
+	Texture2D* texture = TextureCache::sharedTextureCache()->addImage(texturePath.c_str());
+	if (texture)
+		texture->setAliasTexParameters();
+}
+
+static inline void removeSprites(const string& plistName)
 {
 	SpriteFrameCache::sharedSpriteFrameCache()->removeSpriteFramesFromFile(plistName.c_str());
 }
 
-static inline SpriteFrame *getSpriteFrame(const string &name)
+static inline SpriteFrame* getSpriteFrame(const string& name)
 {
 	return SpriteFrameCache::sharedSpriteFrameCache()->spriteFrameByName(name.c_str());
 }
@@ -125,7 +207,7 @@ static inline SpriteFrame *getSpriteFrame(const string &name)
 #if CC_TARGET_PLATFORM == CC_PLATFORM_WIN32 || CC_TARGET_PLATFORM == CC_PLATFORM_MAC
 
 template <class... _Types>
-static inline SpriteFrame *getSpriteFrame(std::format_string<_Types...> _Fmt, _Types &&..._Args)
+static inline SpriteFrame* getSpriteFrame(std::format_string<_Types...> _Fmt, _Types &&..._Args)
 {
 	return getSpriteFrame(std::format(_Fmt, std::forward<_Types>(_Args)...));
 }
@@ -135,7 +217,7 @@ static inline SpriteFrame *getSpriteFrame(std::format_string<_Types...> _Fmt, _T
 // Use fmt lib for platforms without C++20 std::format support
 
 template <class... _Types>
-static inline SpriteFrame *getSpriteFrame(fmt::format_string<_Types...> _Fmt, _Types &&..._Args)
+static inline SpriteFrame* getSpriteFrame(fmt::format_string<_Types...> _Fmt, _Types &&..._Args)
 {
 	return getSpriteFrame(fmt::format(_Fmt, _Args...));
 }

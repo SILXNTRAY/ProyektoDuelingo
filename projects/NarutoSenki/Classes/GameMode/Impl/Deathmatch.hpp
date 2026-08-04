@@ -1,6 +1,7 @@
 #pragma once
 #include "GameMode/IGameModeHandler.hpp"
 #include "MyUtils/KTools.h"
+#include "MyUtils/UnlockRequirements.hpp"
 
 // Deathmatch — endless arcade mode. Mechanically this is just Boss (1v1
 // Duel Arena) mode: same setup (EXP/coin/CKR/level-up, 2x HP multiplier,
@@ -115,7 +116,7 @@ public:
 		if (!isBossRound())
 		{
 			vector<string> used = _pendingAllyRoster;
-			for (const auto &h : getHerosArray())
+			for (const auto& h : getHerosArray())
 				used.push_back(h.name);
 			used.insert(used.end(), bossList.begin(), bossList.end());
 
@@ -145,7 +146,7 @@ public:
 	{
 	}
 
-	void onCharacterInit(CharacterBase *c)
+	void onCharacterInit(CharacterBase* c)
 	{
 		if (!isAddCallback && !getGameLayer()->isHUDInit())
 		{
@@ -173,6 +174,16 @@ public:
 						for (int i = 1; i < 6; i++)
 							hero->changeHPbar();
 
+						// See the matching comment in Boss.hpp -- the level-up
+						// loop above grants a full CKR2 (SKILL5/Ougis2) for
+						// free, which combined with the flat increaseAllCkrs
+						// grant below let both sides open every stage already
+						// able to spam ultimates. Reset CKR2 to empty; it's
+						// earned back only through the existing damage-dealt/
+						// damage-taken gain in increaseAllCkrs() (unchanged).
+						hero->setCKR2(0);
+						hero->_isCanOugis2 = false;
+
 						// On a boss round, the enemy (the only non-player
 						// character present at this point -- boss rounds
 						// give the enemy no allies, see onInitHeros above)
@@ -182,7 +193,9 @@ public:
 						hero->setMaxHPValue(newMaxHP, false);
 						hero->setHPValue(newMaxHP, true);
 
-						hero->increaseAllCkrs(25000);
+						// CKR (SKILL4) only -- CKR2 (SKILL5) deliberately
+						// excluded per the setCKR2(0) reset above.
+						hero->increaseAllCkrs(25000, true, false);
 
 						// No auto-reborn — a death is instead handled by
 						// forceSwitchOnDeath below, which eliminates this
@@ -204,7 +217,7 @@ public:
 		}
 	}
 
-	void onCharacterDead(CharacterBase *c)
+	void onCharacterDead(CharacterBase* c)
 	{
 		if (!c->isPlayerOrCom())
 			return;
@@ -227,8 +240,27 @@ public:
 		getGameLayer()->forceSwitchOnDeath(c);
 	}
 
-	void onCharacterReborn(CharacterBase *c)
+	void onCharacterReborn(CharacterBase* c)
 	{
+	}
+
+	// currentPlayer can be a transformed form (SageNaruto, RikudoNaruto,
+	// etc.) if the match ended mid-transformation -- normalize back to the
+	// base hero, same mapping GameOver.cpp uses for resultChar, so the
+	// record is credited to the hero the player actually picked.
+	static string baseHeroName(const string& name)
+	{
+		if (name == HeroEnum::SageNaruto || name == HeroEnum::RikudoNaruto)
+			return HeroEnum::Naruto;
+		if (name == HeroEnum::SageJiraiya)
+			return HeroEnum::Jiraiya;
+		if (name == HeroEnum::ImmortalSasuke)
+			return HeroEnum::Sasuke;
+		if (name == HeroEnum::RockLee)
+			return HeroEnum::Lee;
+		if (name == HeroEnum::Nagato)
+			return HeroEnum::Pain;
+		return name;
 	}
 
 	// Fires once a side is fully eliminated (all 3 characters down) --
@@ -239,7 +271,11 @@ public:
 	{
 		if (isPlayerSide)
 		{
-			// Player's side is out — run's over, reset the persisted streak.
+			// Player's side is out — run's over, reset the persisted
+			// *current* streak (used to resume/seed the next run's
+			// _stage). The per-hero ArcadeRecordRound best is untouched
+			// here: it's a permanent high-water mark, not a live counter,
+			// so a loss never resets it.
 			KTools::saveDeathmatchStreak(0);
 			return;
 		}
@@ -249,14 +285,50 @@ public:
 		// screen's start_btn (Deathmatch-only) is what actually continues
 		// to the next stage, with the same retained character.
 		KTools::saveDeathmatchStreak(_stage);
+
+		// Also update the per-hero best-round record (ArcadeRecordRound)
+		// for every character on the player's side this run -- the
+		// currently active hero plus both bench allies -- but only if
+		// this stage actually beats each hero's own previous best.
+		// saveArcadeRecordRoundIfBetter() already no-ops when it isn't.
+		auto layer = getGameLayer();
+		if (layer && layer->currentPlayer)
+		{
+			string activeName = baseHeroName(layer->currentPlayer->getName());
+			KTools::saveArcadeRecordRoundIfBetter(activeName.c_str(), _stage);
+
+			for (const auto& allyName : layer->_allyRoster)
+			{
+				if (allyName.empty() || allyName == activeName)
+					continue;
+				KTools::saveArcadeRecordRoundIfBetter(allyName.c_str(), _stage);
+			}
+		}
+
+		// A boss round just cleared -- see if that unlocks whichever hero
+		// is keyed to this specific boss (e.g. beating Madara unlocks
+		// Madara). getHerosArray()[1] is the enemy slot in this 1v1 setup
+		// (see onInitHeros() above, which is also where overrideHeroName
+		// forces it to a boss list pick on boss rounds).
+		if (isBossRound())
+		{
+			auto& heroes = getHerosArray();
+			if (heroes.size() > 1)
+				UnlockRequirements::tryUnlockViaArcadeBoss(heroes[1].name);
+		}
+
+		// Pick up any ArcadeStageRecord unlock rules that just became
+		// satisfied by the ArcadeRecordRound updates above (e.g. NarutoSR
+		// unlocking once Naruto's record hits stage 20).
+		UnlockRequirements::tryUnlockViaProgress();
 	}
 
 	void onSurrender() override
 	{
-		// Forfeiting via the pause menu skips onCharacterDead() entirely
-		// (no character actually died in combat), so it needs its own
-		// hook to reset the streak the same way a real loss does.
-		KTools::saveDeathmatchStreak(0);
+		// Forfeiting via the pause menu no longer resets the persisted
+		// streak -- a surrender is treated as "leaving the run as-is"
+		// rather than a loss, so _stage stays intact for the next time
+		// this run is resumed.
 	}
 
 	vector<string> getExtraPreloadChars() override

@@ -1,23 +1,23 @@
 #pragma once
 #include "GameMode/IGameModeHandler.hpp"
 
-// Duel (1 VS 1 Arena) mode — reuses the Boss slot.
-// Setup mirrors Mode1v1 (EXP/coin/CKR/level-up via changeHPbar x5),
-// then applies an explicit 2x HP multiplier on top of the levelled MaxHP.
-// Each side has 3 characters total (the initial pick + 2 companions in
-// _allyRoster/_enemyAllyRoster). A death eliminates that one character and
-// force-switches to the next living roster member (see
-// GameLayer::forceSwitchOnDeath) instead of ending the match outright —
-// the match only actually ends once a side has lost all 3.
+/* Duel(1 VS 1 Arena) mode — reuses the Boss slot.
+ Setup mirrors Mode1v1 (EXP/coin/CKR/level-up via changeHPbar x5),
+ then applies an explicit 2x HP multiplier on top of the levelled MaxHP.
+ Each side has 3 characters total (the initial pick + 2 companions in
+_allyRoster/_enemyAllyRoster). A death eliminates that one character and
+ force-switches to the next living roster member (see
+ GameLayer::forceSwitchOnDeath) instead of ending the match outright —
+ the match only actually ends once a side has lost all 3.*/
 class ModeBoss : public IGameModeHandler
 {
 private:
 	bool isAddCallback;
 
-	// Resolved in onInitHeros() (handler-local, GameLayer doesn't exist
-	// yet at that point) then transferred into GameLayer::_allyRoster
-	// inside onCharacterInit(), which is the first point it's safe to
-	// touch getGameLayer().
+	/* Resolved in onInitHeros() (handler - local, GameLayer doesn't exist
+	 yet at that point) then transferred into GameLayer::_allyRoster
+	 inside onCharacterInit(), which is the first point it's safe to
+	 touch getGameLayer().*/
 	vector<string> _pendingAllyRoster;
 
 	// Enemy AI's benched roster — same size as the player's, so neither
@@ -61,7 +61,7 @@ public:
 		// duelists and anyone already on the player's bench so the icons
 		// don't visually clash.
 		vector<string> used = _pendingAllyRoster;
-		for (const auto &h : getHerosArray())
+		for (const auto& h : getHerosArray())
 			used.push_back(h.name);
 
 		for (size_t i = 0; i < _pendingAllyRoster.size(); i++)
@@ -104,12 +104,30 @@ public:
 						for (int i = 1; i < 6; i++)
 							hero->changeHPbar();
 
+						// changeHPbar() above levels straight to 6, which
+						// (via its own level-2 and level-4 thresholds)
+						// grants a full CKR (15000, unlocks SKILL4/Ougis1)
+						// AND a full CKR2 (25000, unlocks SKILL5/Ougis2)
+						// immediately -- letting both sides open the match
+						// already able to spam ultimates. Duel mode should
+						// start with SKILL4 available but SKILL5 empty,
+						// earned only through actually landing/taking hits
+						// (see increaseAllCkrs()'s damage-dealt/damage-taken
+						// gain, which stays fully intact and untouched).
+						hero->setCKR2(0);
+						hero->_isCanOugis2 = false;
+
 						// Explicit 2x HP multiplier on top of the levelled MaxHP.
 						uint32_t newMaxHP = hero->getMaxHP() * 2;
 						hero->setMaxHPValue(newMaxHP, false);
 						hero->setHPValue(newMaxHP, true);
 
-						hero->increaseAllCkrs(25000);
+						// Re-grant CKR (SKILL4) only -- changeHPbar()'s level-2
+						// threshold already did this once, but this keeps
+						// it topped up/consistent with the pre-existing
+						// behavior. CKR2 (SKILL5) is deliberately excluded
+						// per the setCKR2(0) reset above.
+						hero->increaseAllCkrs(25000, true, false);
 
 						// No auto-reborn — a death is instead handled by
 						// forceSwitchOnDeath below, which eliminates this
