@@ -64,6 +64,53 @@ function tools.readRecordTimeFromSQL(heroName)
     return KTools:readRecordTimeFromSQL(heroName)
 end
 
+-- Duel (Boss / 1v1 Duel Arena) best-time record, per hero.
+function tools.readDuelRecordTime(heroName)
+    return KTools:readDuelRecordTime(heroName)
+end
+
+function tools.saveDuelRecordTime(heroName, time)
+    KTools:saveDuelRecordTime(heroName, time)
+end
+
+-- Deathmatch (endless arcade) best-ever round/streak record, per hero.
+function tools.readArcadeRecordRound(heroName)
+    return KTools:readArcadeRecordRound(heroName)
+end
+
+function tools.saveArcadeRecordRoundIfBetter(heroName, round)
+    KTools:saveArcadeRecordRoundIfBetter(heroName, round)
+end
+
+-- Unlocked-character persistence and rule-aware unlock checks.
+function tools.ensureUnlockedCharTable()
+    KTools:ensureUnlockedCharTable()
+end
+
+function tools.isCharacterUnlocked(heroName)
+    return KTools:isCharacterUnlocked(heroName)
+end
+
+function tools.unlockCharacter(heroName)
+    KTools:unlockCharacter(heroName)
+end
+
+function tools.lockCharacter(heroName)
+    KTools:lockCharacter(heroName)
+end
+
+function tools.isHeroUnlocked(heroName)
+    return KTools:isHeroUnlocked(heroName)
+end
+
+function tools.isHeroUnlockEligible(heroName)
+    return KTools:isHeroUnlockEligible(heroName)
+end
+
+function tools.tryUnlockHeroViaPurchase(heroName)
+    return KTools:tryUnlockHeroViaPurchase(heroName)
+end
+
 function tools.printUserdata(ud)
     if type(ud) == 'userdata' then
         for key, value in pairs(getmetatable(ud)) do

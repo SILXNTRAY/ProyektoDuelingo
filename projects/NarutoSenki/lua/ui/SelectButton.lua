@@ -79,7 +79,7 @@ function SelectButton:click()
         local tip = CCTips:create('LimitedChar')
         self._selectLayer:addChild(tip, 5000)
     elseif self._charName ~= SelectButton.Char_None and self._isAviable and
-        self:isSupportedCharacter() then
+        self:isSupportedCharacter() and self:isUnlockedCharacter() then
         audio.stopAllSounds()
 
         if not self._selectLayer then
@@ -141,4 +141,14 @@ function SelectButton:isSupportedCharacter()
         end
     end
     return true
+end
+
+function SelectButton:isUnlockedCharacter()
+    if tools.isHeroUnlocked(self._charName) then return true end
+
+    local tip = CCTips:create('LimitedChar')
+    self._selectLayer:addChild(tip, 5000)
+
+    log('Character %s is locked', self._charName)
+    return false
 end

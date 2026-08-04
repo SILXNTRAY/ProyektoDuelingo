@@ -12,7 +12,7 @@ local _None = 'None'
 ns.CharactersLayout = {
     -- Page One
     -- {
-        'Naruto',		'Sakura',		'Sai',			'Kakashi', --[[ Right ]] _None,		    _None,	 	    _None,
+        'Naruto',		'Sakura',		'Sai',			'Kakashi', --[[ Right ]] 'NarutoSR',		    _None,	 	    _None,
         'Shikamaru',	'Ino', 			'Choji',		'Asuma',   --[[ Right ]] 'Kiba', 	    'Hinata', 	    'Shino',
         'Neji', 		'Tenten', 		'Lee', 			_None,     --[[ Right ]] _None,         _None, 	        _None,
     -- },
@@ -26,7 +26,7 @@ ns.CharactersLayout = {
     -- {
         _None, 		   'Tobi', 		    'Konan',		_None,      --[[ Right ]] 'Pain',        _None,         _None,
         _None, 		    'Deidara', 		'Kakuzu', 		'Hidan',    --[[ Right ]] 'Kimimaro',    _None,         _None,
-        'Itachi', 		'Kisame',		_None, 		    _None,      --[[ Right ]] _None, 		 _None,         _None,
+        'Itachi', 		'Kisame',		_None, 		    _None,      --[[ Right ]] 'Madara', 		 _None,         _None,
         -- },
     -- Page Four
     -- {

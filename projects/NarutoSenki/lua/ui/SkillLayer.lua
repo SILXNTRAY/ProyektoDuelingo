@@ -122,12 +122,22 @@ function SkillLayer:initInterface()
     bgSprite:setAnchorPoint(0, 0)
     self:addChild(bgSprite, -5)
 
+    local isBossMode = self._selectLayer and self._selectLayer.isBossMode
+    local isDeathmatchMode = self._selectLayer and self._selectLayer.isDeathmatchMode
+
+    -- Boss/Deathmatch don't track regular wins ("bonds") at all -- both
+    -- fall back to the lowest rank tier for the skill background/frame
+    -- since that visual tier is meant to reflect win-count progression,
+    -- which doesn't apply to either mode.
     local winNum = tools.readWinNumFromSQL(self.selectHero)
 
     local rank_src
     local isBlink = false
     local skillbg_src
-    if winNum >= 300 then
+    if isBossMode or isDeathmatchMode then
+        skillbg_src = 'skill_bg1.png'
+        rank_src = 'rank_c.png'
+    elseif winNum >= 300 then
         skillbg_src = 'skill_bg6.png'
         rank_src = 'rank_sss.png'
         isBlink = true
@@ -249,9 +259,25 @@ function SkillLayer:initInterface()
                               skill_bg:getContentSize().height / 2 + 74)
     self:addChild(detailBG1, 5)
 
-    local recordTime = tools.readRecordTimeFromSQL(self.selectHero)
+    local recordTime
+    if isBossMode then
+        -- Boss: show the duel-specific best time instead of the story-mode
+        -- one, since story-mode's column3 isn't touched in this mode.
+        recordTime = tools.readDuelRecordTime(self.selectHero)
+    elseif isDeathmatchMode then
+        -- Deathmatch doesn't track a completion time at all -- this slot
+        -- is repurposed below to show "CURRENT RECORD:" instead, so the
+        -- actual time value here is unused, but keep it defined for the
+        -- fallback branch below to behave sanely if reached anyway.
+        recordTime = ''
+    else
+        recordTime = tools.readRecordTimeFromSQL(self.selectHero)
+    end
+
     local bestLabel
-    if recordTime == '' then
+    if isDeathmatchMode then
+        bestLabel = CCLabelBMFont:create('RECORD:', 'Fonts/1.fnt')
+    elseif recordTime == '' then
         bestLabel = CCLabelBMFont:create('00:00:00', 'Fonts/1.fnt')
     else
         bestLabel = CCLabelBMFont:create(recordTime, 'Fonts/1.fnt')
@@ -272,7 +298,17 @@ function SkillLayer:initInterface()
                               skill_bg:getContentSize().height / 2 + 74)
     self:addChild(detailBG2, 5)
 
-    local recordLabel = CCLabelBMFont:create(winNum .. ' bonds', 'Fonts/1.fnt')
+    local recordLabelText
+    if isBossMode then
+        recordLabelText = 'NONE'
+    elseif isDeathmatchMode then
+        local arcadeRecord = tools.readArcadeRecordRound(self.selectHero)
+        recordLabelText = 'Round ' .. arcadeRecord
+    else
+        recordLabelText = winNum .. ' bonds'
+    end
+
+    local recordLabel = CCLabelBMFont:create(recordLabelText, 'Fonts/1.fnt')
     recordLabel:setScale(0.3)
     recordLabel:setAnchorPoint(0, 0)
     recordLabel:setPosition(detailBG2:getPositionX() + 12,
