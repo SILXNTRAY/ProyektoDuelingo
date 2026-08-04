@@ -95,6 +95,23 @@ public:
 	static int readCoinFromSQL();
 	static const char *readRecordTimeFromSQL(const char *heroName);
 
+	static const char *readDuelRecordTime(const char *heroName);
+	static void saveDuelRecordTime(const char *heroName, const string &time);
+
+	static int readDeathmatchStreak();
+	static void saveDeathmatchStreak(int streak);
+
+	static int readArcadeRecordRound(const char *heroName);
+	static void saveArcadeRecordRoundIfBetter(const char *heroName, int round);
+
+	static void ensureUnlockedCharTable();
+	static bool isCharacterUnlocked(const char *heroName);
+	static void unlockCharacter(const char *heroName);
+	static void lockCharacter(const char *heroName);
+	static bool isHeroUnlocked(const char *heroName);
+	static bool isHeroUnlockEligible(const char *heroName);
+	static bool tryUnlockHeroViaPurchase(const char *heroName);
+
 	static string encodeData(string data);
 };
 
