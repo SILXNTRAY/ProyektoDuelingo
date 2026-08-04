@@ -42,11 +42,6 @@ public:
 		CC_SAFE_RELEASE(skillSPC13Array);
 		CC_SAFE_RELEASE(skillSPC14Array);
 		CC_SAFE_RELEASE(skillSPC15Array);
-		CC_SAFE_RELEASE(skillSPC16Array);
-		CC_SAFE_RELEASE(skillSPC17Array);
-		CC_SAFE_RELEASE(skillSPC18Array);
-		CC_SAFE_RELEASE(skillSPC19Array);
-		CC_SAFE_RELEASE(skillSPC20Array);
 		CC_SAFE_RELEASE(skill1Array);
 		CC_SAFE_RELEASE(skill2Array);
 		CC_SAFE_RELEASE(skill3Array);
@@ -258,7 +253,7 @@ public:
 				skillSPC3Array->retain();
 			}
 
-			// Extended data-only slots (skillSPC6-20) -- same full-data
+			// Extended data-only slots (skillSPC6-15) -- same full-data
 			// pattern as SPC1-3 above (type/value/range/CD via readData()),
 			// just continuing sequentially from index 20 instead of the
 			// legacy 15/16/17/18/19 (SPC5/4/1/2/3) ordering. No character
@@ -373,61 +368,6 @@ public:
 				skillSPC15Array = (CCArray *)(tmpAction->objectAtIndex(1));
 				setSpcAttackValue15(tmpValue);
 				skillSPC15Array->retain();
-			}
-
-			CC_BREAK_IF(animationArray->count() <= 30);
-			tmpAction = (CCArray *)(animationArray->objectAtIndex(30));
-			tmpData = (CCArray *)(tmpAction->objectAtIndex(0));
-			readData(tmpData, _spcAttackType16, tmpValue, _spcAttackRangeX16, _spcAttackRangeY16, _spcAttackCD16, tmpCombatPoint);
-			if (!_spcAttackType16.empty())
-			{
-				skillSPC16Array = (CCArray *)(tmpAction->objectAtIndex(1));
-				setSpcAttackValue16(tmpValue);
-				skillSPC16Array->retain();
-			}
-
-			CC_BREAK_IF(animationArray->count() <= 31);
-			tmpAction = (CCArray *)(animationArray->objectAtIndex(31));
-			tmpData = (CCArray *)(tmpAction->objectAtIndex(0));
-			readData(tmpData, _spcAttackType17, tmpValue, _spcAttackRangeX17, _spcAttackRangeY17, _spcAttackCD17, tmpCombatPoint);
-			if (!_spcAttackType17.empty())
-			{
-				skillSPC17Array = (CCArray *)(tmpAction->objectAtIndex(1));
-				setSpcAttackValue17(tmpValue);
-				skillSPC17Array->retain();
-			}
-
-			CC_BREAK_IF(animationArray->count() <= 32);
-			tmpAction = (CCArray *)(animationArray->objectAtIndex(32));
-			tmpData = (CCArray *)(tmpAction->objectAtIndex(0));
-			readData(tmpData, _spcAttackType18, tmpValue, _spcAttackRangeX18, _spcAttackRangeY18, _spcAttackCD18, tmpCombatPoint);
-			if (!_spcAttackType18.empty())
-			{
-				skillSPC18Array = (CCArray *)(tmpAction->objectAtIndex(1));
-				setSpcAttackValue18(tmpValue);
-				skillSPC18Array->retain();
-			}
-
-			CC_BREAK_IF(animationArray->count() <= 33);
-			tmpAction = (CCArray *)(animationArray->objectAtIndex(33));
-			tmpData = (CCArray *)(tmpAction->objectAtIndex(0));
-			readData(tmpData, _spcAttackType19, tmpValue, _spcAttackRangeX19, _spcAttackRangeY19, _spcAttackCD19, tmpCombatPoint);
-			if (!_spcAttackType19.empty())
-			{
-				skillSPC19Array = (CCArray *)(tmpAction->objectAtIndex(1));
-				setSpcAttackValue19(tmpValue);
-				skillSPC19Array->retain();
-			}
-
-			CC_BREAK_IF(animationArray->count() <= 34);
-			tmpAction = (CCArray *)(animationArray->objectAtIndex(34));
-			tmpData = (CCArray *)(tmpAction->objectAtIndex(0));
-			readData(tmpData, _spcAttackType20, tmpValue, _spcAttackRangeX20, _spcAttackRangeY20, _spcAttackCD20, tmpCombatPoint);
-			if (!_spcAttackType20.empty())
-			{
-				skillSPC20Array = (CCArray *)(tmpAction->objectAtIndex(1));
-				setSpcAttackValue20(tmpValue);
-				skillSPC20Array->retain();
 			}
 			break;
 		}

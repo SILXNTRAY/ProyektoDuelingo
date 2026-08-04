@@ -22,9 +22,11 @@
 #include "Shinobi/Kisame.hpp"
 #include "Shinobi/Konan.hpp"
 #include "Shinobi/Lee.hpp"
+#include "Shinobi/Madara.hpp"
 #include "Shinobi/Minato.hpp"
 // #include "Shinobi/Nagato.hpp"
 #include "Shinobi/Naruto.hpp"
+#include "Shinobi/NarutoSR.hpp"
 #include "Shinobi/Neji.hpp"
 #include "Shinobi/Orochimaru.hpp"
 #include "Shinobi/Mitsuki.hpp"
@@ -42,6 +44,7 @@
 
 // Bunshin
 #include "Shinobi/Bunshin/NarutoClone.hpp"
+#include "Shinobi/Bunshin/NarutoSRClone.hpp"
 #include "Shinobi/Bunshin/SageNarutoClone.hpp"
 #include "Shinobi/Bunshin/RikudoNarutoClone.hpp"
 
@@ -110,6 +113,7 @@ public:
 		is("Konan") 						ptr = new Konan();
 		is("Kurama") 						ptr = new Kurama();
 		is_or("Lee", "RockLee") 			ptr = new Lee();
+		is("Madara") 						ptr = new Madara();
 		is("MaskFuton") 					ptr = new Mask();
 		is("MaskKaton") 					ptr = new Mask();
 		is("MaskRaiton") 					ptr = new Mask();
@@ -117,6 +121,7 @@ public:
 		is("Naruto") 						is_role(Role::Clone) ptr = new NarutoClone();		else ptr = new Naruto();
 		is("RikudoNaruto") 					is_role(Role::Clone) ptr = new RikudoNarutoClone();	else ptr = new Naruto();
 		is("SageNaruto") 					is_role(Role::Clone) ptr = new SageNarutoClone();	else ptr = new Naruto();
+		is("NarutoSR") 						is_role(Role::Clone) ptr = new NarutoClone();		else ptr = new NarutoSR();
 		is("Neji") 							ptr = new Neji();
 		is("Orochimaru") 					ptr = new Orochimaru();
 		is("Mitsuki") 					    ptr = new Mitsuki();
