@@ -391,7 +391,15 @@ string KTools::readSQLite(const char* table, const char* column, const char* val
 		if (target.empty())
 			CCLOG("[readSQLite] WARNING no match for value=%s", value);
 
-		if (!is_same(targetColumn, "column3") &&
+		// Only normalize through to_int() when we actually found a row --
+		// doing this unconditionally used to turn a genuine "no row found"
+		// (empty target) into the string "0" via to_int(""), which made
+		// callers that check .empty() to distinguish "no row yet" from
+		// "row exists with value 0" (e.g. upsertUnlockedCharRow's
+		// insert-vs-update check) incorrectly think a row already existed,
+		// silently turning their INSERT into a no-op UPDATE.
+		if (!target.empty() &&
+			!is_same(targetColumn, "column3") &&
 			!is_same(targetColumn, "column4") &&
 			!is_same(targetColumn, "duel_time"))
 		{
