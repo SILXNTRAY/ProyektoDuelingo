@@ -777,6 +777,16 @@ void HudLayer::initHeroInterface()
 			enemy_hpLabel->setPosition(Vec2(winWidth, winHeight - 54));
 			enemy_hpLabel->setAnchorPoint(Vec2(1, 0));
 			addChild(enemy_hpLabel, 5000);
+
+			// Duel-mode-only chakra bar text (see setDuelChakraBarUI) --
+			// mirrors enemy_hpLabel's positioning, sat just above it next
+			// to enemy_status_expbar. Both sides start at "0 BARS" since
+			// the shared pool starts empty.
+			enemyExpLabel = CCLabelBMFont::create("0 BARS", Fonts::Default);
+			enemyExpLabel->setScale(0.35f);
+			enemyExpLabel->setPosition(Vec2(winWidth - 94, winHeight - 54));
+			enemyExpLabel->setAnchorPoint(Vec2(0.5f, 0));
+			addChild(enemyExpLabel, 5000);
 		}
 	}
 
@@ -959,6 +969,18 @@ void HudLayer::setCKRLose(bool isCRK2)
 
 void HudLayer::setEXPLose()
 {
+	// Duel modes (Boss/Deathmatch) repurpose this same EXP bar/label to
+	// show the shared chakra pool instead -- duel rosters are always
+	// level 6 (maxed), so the real EXP math below never applies there
+	// anyway. Every one of this function's existing call sites (ally
+	// switch, kill-exp gains, etc.) safely redirects here instead of
+	// running dead EXP math.
+	if (isDuelMode())
+	{
+		setDuelChakraBarUI(true);
+		return;
+	}
+
 	int exp = getGameLayer()->currentPlayer->getEXP();
 	int lvExp = (getGameLayer()->currentPlayer->getLV() - 1) * 500;
 	float Percent = (exp - lvExp) / 500.0f * 100;
@@ -976,8 +998,27 @@ void HudLayer::setEXPLose()
 	{
 		expLabel->setString(format("{}%", (int)Percent).c_str());
 	}
+}
 
-	// In duel mode, also update enemy EXP bar
+void HudLayer::setDuelChakraBarUI(bool isPlayerSide)
+{
+	// Fill percent within the *current* bar (wraps every 15000, like an
+	// EXP bar wrapping on level-up) and the count of full bars banked so
+	// far -- e.g. pool==15000 reads as "empty, 1 BAR", pool==30000 reads
+	// as "empty, 2 BARS", matching how a level-up bar visually resets to
+	// empty right as the level counter ticks up.
+	uint32_t pool = getGameLayer()->getDuelChakra(isPlayerSide);
+	uint32_t bars = pool / GameLayer::kDuelChakraBarSize;
+	float percent = (pool % GameLayer::kDuelChakraBarSize) * 100.0f / GameLayer::kDuelChakraBarSize;
+
+	ProgressTimer* bar = isPlayerSide ? status_expbar : enemy_status_expbar;
+	CCLabelBMFont* label = isPlayerSide ? expLabel : enemyExpLabel;
+
+	if (bar)
+		bar->setPercentage(percent);
+
+	if (label)
+		label->setString(format("{} BAR{}", bars, bars == 1 ? "" : "S").c_str());
 }
 
 void HudLayer::setTowerState(int charId)
@@ -1420,6 +1461,12 @@ bool HudLayer::getSkillFinish()
 
 bool HudLayer::getOugisEnable(bool isCKR2)
 {
+	if (isDuelMode())
+	{
+		uint32_t pool = getGameLayer()->getDuelChakra(true);
+		return pool >= (isCKR2 ? GameLayer::kDuelSkill5Cost : GameLayer::kDuelSkill4Cost);
+	}
+
 	if (!isCKR2)
 	{
 		uint32_t ckr = getGameLayer()->currentPlayer->getCKR();
@@ -1434,6 +1481,17 @@ bool HudLayer::getOugisEnable(bool isCKR2)
 
 void HudLayer::costCKR(uint32_t value, bool isCKR2)
 {
+	if (isDuelMode())
+	{
+		// value comes from ActionButton's click handlers, which already
+		// pass the duel-mode cost (1 bar / 3 bars) when isDuelMode() --
+		// see ActionButton.cpp's OUGIS1/OUGIS2 click handlers.
+		uint32_t pool = getGameLayer()->getDuelChakra(true);
+		getGameLayer()->setDuelChakra(true, pool >= value ? pool - value : 0);
+		setCKRLose(isCKR2);
+		return;
+	}
+
 	if (!isCKR2)
 	{
 		uint32_t ckr = getGameLayer()->currentPlayer->getCKR();

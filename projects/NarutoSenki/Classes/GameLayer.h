@@ -94,6 +94,10 @@ public:
 	unordered_set<string> _eliminatedAllies;
 	unordered_set<string> _eliminatedEnemyAllies;
 	bool isRosterNameEliminated(const string& name, bool isPlayerSide);
+
+	// [0] = enemy side's shared chakra pool, [1] = player side's -- see
+	// getDuelChakra/setDuelChakra/kDuelChakraBarSize above for details.
+	uint32_t _duelChakra[2] = {0, 0};
 	// Called from ModeBoss::onCharacterDead() instead of ending the match
 	// directly. Queues the elimination/force-switch to run next frame
 	// rather than doing it synchronously — onCharacterDead() fires as the
@@ -253,6 +257,55 @@ public:
 	void setHPLose(float percent);
 	void setEnemyHPLose(float percent);
 	void setCKRLose(bool isCRK2);
+
+	// --- Duel-mode (Boss/Deathmatch) shared chakra pool ---
+	//
+	// Outside duel modes, CKR/CKR2 live per-character on CharacterBase
+	// (see PROP_UInt(_ckr, CKR) / PROP_UInt(_ckr2, CKR2)) and get fully
+	// refilled whenever an ally switch brings a new hero in. In Boss and
+	// Deathmatch, chakra is shared across a whole side instead -- the
+	// player and all player allies draw from (and fill) one pool, and
+	// the enemy + its allies share a separate one -- so it has to live
+	// here on GameLayer, which outlives any single spawned Hero and is
+	// reachable before a bench ally has even spawned in for the first
+	// time. Ally switches in duel mode don't touch this at all; the new
+	// hero just inherits whatever their side's pool currently reads.
+	//
+	// The pool is denominated in "bars" of 15000 each, capped at 7 bars
+	// (105000). Skill 4 costs 1 bar (15000, same as normal mode); skill
+	// 5 costs 3 bars (45000, vs. 25000 normally) since it's now drawing
+	// from the same pool skill 4 does rather than a separate, smaller
+	// one. The HUD's EXP bar/label (repurposed for duel modes, since
+	// duel rosters are always level 6/maxed and the real EXP bar is
+	// otherwise unused there) shows progress within the *current* bar
+	// (pool % kDuelChakraBarSize) and the count of full bars banked so
+	// far (pool / kDuelChakraBarSize) -- e.g. "1 BAR", "2 BARS" -- the
+	// same way an EXP bar fills and wraps on level-up.
+	static constexpr uint32_t kDuelChakraBarSize = 15000;
+	static constexpr uint32_t kDuelChakraMaxBars = 7;
+	static constexpr uint32_t kDuelChakraMax = kDuelChakraBarSize * kDuelChakraMaxBars; // 105000
+	static constexpr uint32_t kDuelSkill4Cost = kDuelChakraBarSize;     // 1 bar  (15000)
+	static constexpr uint32_t kDuelSkill5Cost = kDuelChakraBarSize * 3; // 3 bars (45000)
+
+	// Hold-to-charge rate (ramen button / AI idle-charge, see
+	// ActionButton::updateChakraCharge() and CharacterBase::checkRetri()):
+	// a linear ramp from kChargeR0 to a rate that reaches kDuelChakraMax
+	// (105000, full 7 bars) at exactly kChargeMaxT seconds of continuous
+	// holding. Shared here so the player's touch-driven charge and the
+	// AI's own idle-charge behavior use identical math.
+	static constexpr float kChargeR0 = 5000.f;   // units/s at start of hold
+	static constexpr float kChargeA  = 11911.f;  // acceleration (units/s²)
+	static constexpr float kChargeMaxT = 3.8f;   // seconds to fill from empty
+
+	uint32_t getDuelChakra(bool isPlayerSide) const { return _duelChakra[isPlayerSide ? 1 : 0]; }
+	void setDuelChakra(bool isPlayerSide, uint32_t value);
+	void addDuelChakra(bool isPlayerSide, uint32_t value);
+	// Resyncs a just-spawned duel-mode hero's _isCanOugis1/2 flags (used
+	// by AI to decide whether it can throw skill4/5) against their
+	// side's current pool. Needed because those flags default to false
+	// on construction and would otherwise stay wrong until the next
+	// chakra gain happens to land on this specific character.
+	void syncDuelOugisFlags(class CharacterBase* hero, bool isPlayerSide);
 
 	void setReport(const string& slayer, const string& dead, uint32_t killNum);
 	void clearDoubleClick();

@@ -61,6 +61,9 @@ public:
 	static bool isHeroUnlocked(const char *heroName);
 	static bool isHeroUnlockEligible(const char *heroName);
 	static bool tryUnlockHeroViaPurchase(const char *heroName);
+	// Newline-joined unlock-condition line(s) for the select-screen
+	// locked-character popup -- see UnlockRequirements::getUnlockConditionLines().
+	static string getUnlockConditionLines(const char *heroName);
 
 
 	// Deathmatch last-used team (main pick + up to 2 bench allies), so the

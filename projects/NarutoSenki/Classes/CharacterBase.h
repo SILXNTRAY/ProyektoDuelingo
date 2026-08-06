@@ -444,6 +444,22 @@ public:
 	bool				_isCanOugis1;
 	bool				_isCanOugis2;
 
+	// Duel-mode AI idle-charge (the AI equivalent of a player holding the
+	// ramen button -- see ActionButton::updateChakraCharge() and
+	// CharacterBase::checkRetri()/tryAIChargeChakra() for the decision +
+	// accumulation logic). AI characters don't have an ActionButton, so
+	// this is its own parallel path sharing GameLayer's charge-rate
+	// constants.
+	bool				_isAIChargingChakra = false;
+	float				_aiChakraChargeHeld = 0.f;
+	// Match-clock second (getGameLayer()->_second) after which the AI is
+	// next allowed to even consider starting a charge -- keeps attempts
+	// from being re-rolled every single AI tick.
+	int					_nextChakraChargeAttemptSecond = 0;
+	void				tryAIChargeChakra();
+	void				updateAIChargeChakra(float dt);
+	void				stopAIChargeChakra();
+
 	CCArray*			idleArray;
 	CCArray*			walkArray;
 	CCArray*			hurtArray;

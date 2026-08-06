@@ -53,6 +53,9 @@ public:
 	Menu* enemy_gearMenu = nullptr;
 
 	CCLabelBMFont* enemy_hpLabel = nullptr;
+	// Mirrors expLabel, but for enemy_status_expbar -- both only carry
+	// duel-mode "N BAR(S)" chakra text; see setDuelChakraBarUI().
+	CCLabelBMFont* enemyExpLabel = nullptr;
 
 	Sprite* enemy_gear1 = nullptr;
 	Sprite* enemy_gear2 = nullptr;
@@ -114,6 +117,10 @@ public:
 	void setCKRLose(bool isCRK2);
 	void setEXPLose();
 	bool isDuelMode();
+	// Repurposes status_expbar/expLabel (or the enemy mirror) to show
+	// the duel-mode shared chakra pool instead of level EXP -- see
+	// GameLayer::kDuelChakraBarSize for how the pool maps to bars.
+	void setDuelChakraBarUI(bool isPlayerSide);
 
 	void setEnemyHPLose(float percent);
 

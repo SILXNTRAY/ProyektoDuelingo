@@ -67,8 +67,17 @@ bool ActionButton::ccTouchBegan(Touch *touch, Event *event)
 	{
 		return false;
 	}
-	click();
 
+	// Duel-mode ramen button: no CD, hold to charge chakra instead of
+	// triggering the normal click/heal flow. The press is consumed here
+	// entirely -- ccTouchEnded() stops the charge and the heal never fires.
+	if (_abType == Item1 && _delegate->isDuelMode())
+	{
+		startChakraCharge();
+		return true;
+	}
+
+	click();
 	return true;
 }
 
@@ -76,7 +85,129 @@ void ActionButton::ccTouchEnded(Touch *touch, Event *event)
 {
 	if (_abType == NAttack)
 		_delegate->attackButtonRelease();
+
+	if (_abType == Item1 && _isChargingChakra)
+		stopChakraCharge();
 }
+
+void ActionButton::ccTouchCancelled(Touch *touch, Event *event)
+{
+	// A held charge needs to stop even if the touch never reaches
+	// ccTouchEnded (e.g. interrupted by a system alert or another touch
+	// taking over) -- otherwise updateChakraCharge() would keep running
+	// against a finger that's no longer down.
+	if (_abType == Item1 && _isChargingChakra)
+		stopChakraCharge();
+}
+
+// ---------------------------------------------------------------------------
+// Duel-mode hold-to-charge chakra (Item1 / ramen button)
+// ---------------------------------------------------------------------------
+//
+// Design target: holding from empty (0) to full (7 bars = 105000 units)
+// takes exactly 3.8 seconds. The charge rate follows a linear ramp so it
+// starts slow (feels fair -- you can't instantly jam skill5) and ends fast
+// (rewarding sustained holds). Given:
+//
+//   pool(t) = r0·t + ½·a·t²              (quadratic integration of linear rate)
+//   rate(t) = r0 + a·t                   (linear ramp)
+//   pool(T) = 105000,  T = 3.8 s
+//   r0      = 5000 units/s               (initial, slow-start feel)
+//
+// Solving: 1.9·(r1 - r0) = 105000 - 19000  =>  r1 ≈ 50263  =>  a ≈ 11911
+//
+// Each scheduler tick: Δpool = rate(t_held) · dt  (clamped to kDuelChakraMax)
+//
+// The button: has no cooldown in duel mode (the CD is never started; the
+// ramen heal never fires). The charge starts on touch-down, stops on
+// touch-up. A short "freeze" animation plays on touch-down as visual feedback.
+
+// Rate constants (kChargeR0/kChargeA/kChargeMaxT) now live on GameLayer
+// alongside the other kDuelChakra* constants -- see GameLayer.h -- so the
+// AI's own idle-charge behavior (CharacterBase::checkRetri()) can share
+// the exact same math instead of risking drift from a second copy.
+
+void ActionButton::startChakraCharge()
+{
+	if (_isChargingChakra)
+		return;
+
+	// Can only start a charge while standing idle -- mid-attack, mid-hurt,
+	// walking, etc. all block it. (updateChakraCharge() below re-checks
+	// this every tick too, so a charge that starts idle still gets cut
+	// off the moment idle is interrupted, e.g. by getting hit.)
+	auto* player = getGameLayer()->currentPlayer;
+	if (!player || player->getState() != State::IDLE)
+		return;
+
+	_isChargingChakra = true;
+	_chakraChargeHeld = 0.f;
+
+	// Press-feedback visual only (matches other buttons' "began" look)
+	// without going through beganAnimation(), since that unconditionally
+	// starts the CD timer -- this button has none in duel mode.
+	if (markSprite && _abType != OUGIS1 && _abType != OUGIS2)
+	{
+		if (!_freezeAction || _isColdChanged)
+		{
+			_isColdChanged = false;
+			createFreezeAnimation();
+		}
+		markSprite->stopAllActions();
+		markSprite->runAction(_freezeAction);
+	}
+
+	schedule(schedule_selector(ActionButton::updateChakraCharge), 0.016f); // ~60 Hz
+}
+
+void ActionButton::stopChakraCharge()
+{
+	if (!_isChargingChakra)
+		return;
+
+	_isChargingChakra = false;
+	_chakraChargeHeld = 0.f;
+	unschedule(schedule_selector(ActionButton::updateChakraCharge));
+}
+
+void ActionButton::updateChakraCharge(float dt)
+{
+	if (!_delegate->isDuelMode() || !_isChargingChakra)
+	{
+		stopChakraCharge();
+		return;
+	}
+
+	auto* player = getGameLayer()->currentPlayer;
+	// Idle is required to keep charging, not just to start -- anything
+	// that breaks idle (getting hit into HURT/KNOCKDOWN/AIRHURT, using a
+	// skill, walking, etc.) cuts the charge off immediately, same as if
+	// the touch had been released.
+	if (!player || player->getState() != State::IDLE)
+	{
+		stopChakraCharge();
+		return;
+	}
+
+	// Clamp held time so rate never exceeds what it was at the 3.8s mark.
+	float t = (std::min)(_chakraChargeHeld, GameLayer::kChargeMaxT);
+	float rate = GameLayer::kChargeR0 + GameLayer::kChargeA * t;
+	float delta = rate * dt;
+
+	_chakraChargeHeld += dt;
+
+	uint32_t gain = static_cast<uint32_t>(delta + 0.5f); // round to nearest
+	if (gain == 0) gain = 1;
+
+	getGameLayer()->addDuelChakra(true, gain); // true = player side; also
+	                                            // refreshes the bar/label
+	                                            // and skill4/5 button dials
+
+	// Sync the player's own ougis-castable flags in case a bar just tipped over.
+	getGameLayer()->syncDuelOugisFlags(player, true);
+}
+
+// ---------------------------------------------------------------------------
 
 void ActionButton::click()
 {
@@ -175,7 +306,11 @@ bool ActionButton::isCanClick()
 			{
 				if (_delegate->getSkillFinish() && _delegate->getOugisEnable(true) && !_isLock && !_delegate->ougisLayer)
 				{
-					_delegate->costCKR(25000, true);
+					// Duel modes (Boss/Deathmatch) share one chakra pool
+					// per side, so skill5 draws 3 bars (45000) from it
+					// instead of the normal mode's separate 25000 CKR2
+					// pool -- see GameLayer::kDuelSkill5Cost.
+					_delegate->costCKR(_delegate->isDuelMode() ? GameLayer::kDuelSkill5Cost : 25000, true);
 					return true;
 				}
 			}
@@ -463,12 +598,40 @@ void ActionButton::setProgressMark()
 
 void ActionButton::updateProgressMark()
 {
-	// NOTE: Using uint32_t will get wrong results.
-	// uint32_t ckr = 100;
-	// float result = -1    * ckr; //=> 4294967196
-	// float result = -1.0f * ckr; //=> -100
-	int ckr = getGameLayer()->currentPlayer->getCKR();
-	int ckr2 = getGameLayer()->currentPlayer->getCKR2();
+	int ckr;
+	int ckr2;
+
+	if (_delegate->isDuelMode())
+	{
+		uint32_t pool = getGameLayer()->getDuelChakra(true); // player's own shared pool drives their own button dials
+
+		// Skill4 (OUGIS1, 1 bar/15000): the pool is already denominated
+		// in the same 15000-sized units the math below expects, so it
+		// feeds straight in unchanged. Past 30000 the code below just
+		// shows "fully charged", which still reads correctly here too
+		// (skill4's been castable since 15000 regardless of the pool
+		// going higher for skill5's sake).
+		ckr = (int)pool;
+
+		// Skill5 (OUGIS2, 3 bars/45000 in duel mode vs. 25000 normally):
+		// rescale the pool's 0..45000 charging range onto the 0..25000
+		// domain the math below expects, so the dial reads empty at
+		// pool==0 and full/castable right at pool==45000. The old
+		// 25000..50000 "overcharge" stage has no duel-mode equivalent
+		// (there's no skill6 for it to be hinting at) so it's skipped --
+		// once castable the dial just holds full via the same >=25000
+		// branch below.
+		ckr2 = (int)((std::min)(pool, GameLayer::kDuelSkill5Cost) * 25000 / GameLayer::kDuelSkill5Cost);
+	}
+	else
+	{
+		// NOTE: Using uint32_t will get wrong results.
+		// uint32_t ckr = 100;
+		// float result = -1    * ckr; //=> 4294967196
+		// float result = -1.0f * ckr; //=> -100
+		ckr = getGameLayer()->currentPlayer->getCKR();
+		ckr2 = getGameLayer()->currentPlayer->getCKR2();
+	}
 
 	if (_abType == OUGIS1)
 	{

@@ -3,6 +3,7 @@
 #include "Core/Hero.hpp"
 #include "GameMode/GameModeImpl.h"
 #include "MyUtils/KTools.h"
+#include "MyUtils/UnlockRequirements.hpp"
 
 GameOver::GameOver()
 {
@@ -601,6 +602,16 @@ void GameOver::listResult()
 	getGameLayer()->_isSurrender = false;
 
 	getGameModeHandler()->onGameOver();
+
+	// Drain whatever unlocks became pending -- either from the record
+	// saves just above (RegularWins / ArcadeStageRecord rules) or from
+	// earlier in the match (e.g. an ArcadeBoss unlock fired mid-fight
+	// by Deathmatch::onSideEliminated()) -- and show a popup for each,
+	// one after another. Only actually pops up when a character was
+	// really unlocked; an empty queue is a silent no-op.
+	auto justUnlocked = UnlockRequirements::takePendingUnlockNotifications();
+	_unlockPopupQueue.insert(_unlockPopupQueue.end(), justUnlocked.begin(), justUnlocked.end());
+	showNextUnlockedPopup();
 }
 
 void GameOver::onUPloadBtn(Ref* sender)
@@ -679,6 +690,65 @@ void GameOver::onBackToMenu(Ref* sender)
 		exitLayer->addChild(btm_text, 2);
 		addChild(exitLayer, 500);
 	}
+}
+
+void GameOver::showNextUnlockedPopup()
+{
+	// One at a time -- don't stack a second popup on top of one still
+	// showing; onUnlockedPopupOK() calls back into this once the
+	// current one closes to advance the queue.
+	if (unlockedLayer || _unlockPopupQueue.empty())
+		return;
+
+	string heroName = _unlockPopupQueue.front();
+	_unlockPopupQueue.erase(_unlockPopupQueue.begin());
+
+	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/select.ogg");
+	unlockedLayer = Layer::create();
+
+	// Same confirm-popup container as onBackToMenu()'s exitLayer --
+	// same confirm_bg.png background -- swapping in unlocked_title.png
+	// for confirm_title.png, a custom "X has been unlocked!" label
+	// (Fonts::Default, i.e. Fonts/1.fnt) in place of the static
+	// btm_text.png sprite, and okay_btn1/2.png instead of yes_btn1/2.png
+	// for the single dismiss button (this popup has no cancel option,
+	// so "yes" never made sense here to begin with).
+	auto unlocked_bg = Sprite::createWithSpriteFrameName("confirm_bg.png");
+	unlocked_bg->setPosition(Vec2(winSize.width / 2, winSize.height / 2));
+
+	auto unlocked_title = Sprite::createWithSpriteFrameName("unlocked_title.png");
+	unlocked_title->setPosition(Vec2(winSize.width / 2, winSize.height / 2 + 38));
+
+	// Wrapped to the confirm container's width so longer hero names
+	// don't spill past confirm_bg.png's edges.
+	auto unlockedText = CCLabelBMFont::create(
+		format("{} has been unlocked!", heroName).c_str(),
+		Fonts::Default,
+		unlocked_bg->getContentSize().width - 20,
+		kCCTextAlignmentCenter);
+	unlockedText->setScale(0.4f);
+	unlockedText->setPosition(Vec2(winSize.width / 2, winSize.height / 2 + 8));
+
+	MenuItem* ok_btn = MenuItemSprite::create(Sprite::createWithSpriteFrameName("ok_btn1.png"), Sprite::createWithSpriteFrameName("ok_btn2.png"), this, menu_selector(GameOver::onUnlockedPopupOK));
+
+	Menu* unlocked_menu = Menu::create(ok_btn, nullptr);
+	unlocked_menu->setPosition(Vec2(winSize.width / 2, winSize.height / 2 - 30));
+
+	unlockedLayer->addChild(unlocked_bg, 1);
+	unlockedLayer->addChild(unlocked_menu, 2);
+	unlockedLayer->addChild(unlocked_title, 2);
+	unlockedLayer->addChild(unlockedText, 2);
+	addChild(unlockedLayer, 500);
+}
+
+void GameOver::onUnlockedPopupOK(Ref* sender)
+{
+	SimpleAudioEngine::sharedEngine()->playEffect("Audio/Menu/confirm.ogg");
+	unlockedLayer->removeFromParent();
+	unlockedLayer = nullptr;
+
+	// Advance to the next queued unlock, if any.
+	showNextUnlockedPopup();
 }
 
 void GameOver::onLeft(Ref* sender)

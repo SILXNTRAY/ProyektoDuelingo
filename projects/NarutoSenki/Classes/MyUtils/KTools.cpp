@@ -813,6 +813,11 @@ bool KTools::tryUnlockHeroViaPurchase(const char* heroName)
 	return UnlockRequirements::tryUnlockViaPurchase(heroName);
 }
 
+string KTools::getUnlockConditionLines(const char* heroName)
+{
+	return UnlockRequirements::getUnlockConditionLinesJoined(heroName);
+}
+
 string KTools::encodeData(string data)
 {
 	// SHA1 *sha1;

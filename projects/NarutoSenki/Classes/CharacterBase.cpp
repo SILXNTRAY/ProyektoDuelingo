@@ -1416,7 +1416,7 @@ void CharacterBase::setDamage(CharacterBase *attacker, const string &effectType,
 				boundValue = 0;
 		}
 
-		_master->increaseAllCkrs(boundValue);
+		_master->increaseAllCkrs(isDuelMode() ? (std::max)(1u, boundValue / 10) : boundValue);
 	}
 	else if (!_isControlled)
 	{
@@ -1450,7 +1450,7 @@ void CharacterBase::setDamage(CharacterBase *attacker, const string &effectType,
 			isGainable = false;
 
 		if (isGainable)
-			increaseAllCkrs(boundValue);
+				increaseAllCkrs(isDuelMode() ? (std::max)(1u, boundValue / 10) : boundValue);
 	}
 
 	if (isPlayerOrCom() && !currentAttacker->_isControlled)
@@ -1470,7 +1470,7 @@ void CharacterBase::setDamage(CharacterBase *attacker, const string &effectType,
 		}
 
 		if (gainValue != 0)
-			currentAttacker->increaseAllCkrs(gainValue);
+			currentAttacker->increaseAllCkrs(isDuelMode() ? (std::max)(1u, gainValue / 10) : gainValue);
 	}
 
 	if (isPlayer() || (isNotTower() &&
@@ -3779,19 +3779,29 @@ void CharacterBase::attack(ABType type)
 	case OUGIS1:
 		if (isNotPlayer() || _isAI)
 		{
-			uint32_t ckr = getCKR();
-			if (ckr >= 15000)
+			if (isDuelMode())
 			{
-				ckr -= 15000;
-				setCKR(ckr);
+				bool side = isPlayer();
+				uint32_t pool = getGameLayer()->getDuelChakra(side);
+				getGameLayer()->setDuelChakra(side, pool >= GameLayer::kDuelSkill4Cost ? pool - GameLayer::kDuelSkill4Cost : 0);
+				getGameLayer()->syncDuelOugisFlags(this, side);
 			}
 			else
 			{
-				setCKR(0);
-			}
-			if (ckr < 15000)
-			{
-				_isCanOugis1 = false;
+				uint32_t ckr = getCKR();
+				if (ckr >= 15000)
+				{
+					ckr -= 15000;
+					setCKR(ckr);
+				}
+				else
+				{
+					setCKR(0);
+				}
+				if (ckr < 15000)
+				{
+					_isCanOugis1 = false;
+				}
 			}
 		}
 
@@ -3804,19 +3814,29 @@ void CharacterBase::attack(ABType type)
 	case OUGIS2:
 		if (isNotPlayer() || _isAI)
 		{
-			uint32_t ckr2 = getCKR2();
-			if (ckr2 >= 25000)
+			if (isDuelMode())
 			{
-				ckr2 -= 25000;
-				setCKR2(ckr2);
+				bool side = isPlayer();
+				uint32_t pool = getGameLayer()->getDuelChakra(side);
+				getGameLayer()->setDuelChakra(side, pool >= GameLayer::kDuelSkill5Cost ? pool - GameLayer::kDuelSkill5Cost : 0);
+				getGameLayer()->syncDuelOugisFlags(this, side);
 			}
 			else
 			{
-				setCKR2(0);
-			}
-			if (ckr2 < 25000)
-			{
-				_isCanOugis2 = false;
+				uint32_t ckr2 = getCKR2();
+				if (ckr2 >= 25000)
+				{
+					ckr2 -= 25000;
+					setCKR2(ckr2);
+				}
+				else
+				{
+					setCKR2(0);
+				}
+				if (ckr2 < 25000)
+				{
+					_isCanOugis2 = false;
+				}
 			}
 		}
 
@@ -5308,7 +5328,21 @@ bool CharacterBase::stepBack2()
 bool CharacterBase::checkRetri()
 {
 	if (isDuelMode())
+	{
+		// Duel modes have no ramen healing (see setItem()'s own
+		// isDuelMode() guard) -- instead, occasionally try to hold-charge
+		// the shared chakra pool while genuinely idle. This piggybacks on
+		// whatever idle windows the AI's own decision tree already
+		// produces rather than forcing one open -- it doesn't override
+		// needBackToTowerToRestoreHP()'s caller chain, so a charge that's
+		// started here can get cut short the moment the AI decides to act
+		// again. That's an intentional simplification (touching all 15+
+		// per-hero AI files to force a guaranteed stand-still window would
+		// be a much bigger change for what's meant to be a light, "every
+		// now and then" behavior, not a scripted full bar every time).
+		tryAIChargeChakra();
 		return false;
+	}
 
 	if (_isCanItem1 && getCoin() >= 50)
 	{
@@ -5484,6 +5518,23 @@ void CharacterBase::enableSkill3(float dt)
 
 void CharacterBase::increaseAllCkrs(uint32_t value, bool enableLv2, bool enableLv4)
 {
+	// Duel modes (Boss/Deathmatch) share one chakra pool per side instead
+	// of each character accumulating CKR/CKR2 independently -- see
+	// GameLayer::kDuelChakraBarSize. Gains from any character on a side
+	// (this, a controlling _master, or an attacker earning CKR off a
+	// landed hit -- see the call sites in dealDamage/takeDamage) all feed
+	// that one side's pool. Level gating (lv2/lv4) is dropped here too:
+	// duel rosters spawn at level 6 already, so it never applied there
+	// in practice, and it can't apply cleanly to a shared pool since the
+	// gain may be earned by _master or an attacker rather than `this`.
+	if (isDuelMode())
+	{
+		bool side = isPlayer();
+		getGameLayer()->addDuelChakra(side, value);
+		getGameLayer()->syncDuelOugisFlags(this, side);
+		return;
+	}
+
 	if (_level >= 2 && enableLv2)
 	{
 		uint32_t ckr = MIN(getCKR() + value, 45000);
@@ -5507,6 +5558,85 @@ void CharacterBase::increaseAllCkrs(uint32_t value, bool enableLv2, bool enableL
 		if (isPlayer())
 			getGameLayer()->setCKRLose(true);
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Duel-mode AI idle-charge -- the AI equivalent of a player holding the
+// ramen button (see ActionButton::updateChakraCharge()). AI-controlled
+// characters have no ActionButton of their own, so this mirrors that same
+// math independently, sharing GameLayer::kChargeR0/kChargeA/kChargeMaxT.
+// ---------------------------------------------------------------------------
+
+void CharacterBase::tryAIChargeChakra()
+{
+	// Only AI-controlled characters use this path -- the human player's
+	// own charge is entirely touch-driven via ActionButton.
+	if (!_isAI || _isAIChargingChakra)
+		return;
+
+	if (getState() != State::IDLE)
+		return;
+
+	// Rate-limit how often this even gets *considered* -- checkRetri()
+	// (this function's only caller) runs on every AI tick across every
+	// spawned duel-mode character, so without this it would re-roll far
+	// more often than "every now and then".
+	int now = getGameLayer()->_second;
+	if (now < _nextChakraChargeAttemptSecond)
+		return;
+
+	// "0-1 bar left": only bother once banked chakra has dropped below a
+	// full bar. A side sitting on 2+ bars already has plenty banked for
+	// skill4, so there's no reason for its AI to stand around charging.
+	bool side = isPlayer();
+	if (getGameLayer()->getDuelChakra(side) >= GameLayer::kDuelChakraBarSize)
+	{
+		_nextChakraChargeAttemptSecond = now + 4; // re-check again shortly
+		return;
+	}
+
+	// Re-roll roughly every 4s when eligible, with a 25% chance to
+	// actually commit each time -- averages out to "every now and then"
+	// rather than grabbing the very first idle moment it sees.
+	_nextChakraChargeAttemptSecond = now + 4;
+	if (random(100) >= 25)
+		return;
+
+	_isAIChargingChakra = true;
+	_aiChakraChargeHeld = 0.f;
+	schedule(schedule_selector(CharacterBase::updateAIChargeChakra), 0.1f);
+}
+
+void CharacterBase::updateAIChargeChakra(float dt)
+{
+	if (!isDuelMode() || !_isAIChargingChakra || getState() != State::IDLE)
+	{
+		stopAIChargeChakra();
+		return;
+	}
+
+	float t = (std::min)(_aiChakraChargeHeld, GameLayer::kChargeMaxT);
+	float rate = GameLayer::kChargeR0 + GameLayer::kChargeA * t;
+	float delta = rate * dt;
+
+	_aiChakraChargeHeld += dt;
+
+	uint32_t gain = static_cast<uint32_t>(delta + 0.5f);
+	if (gain == 0) gain = 1;
+
+	bool side = isPlayer();
+	getGameLayer()->addDuelChakra(side, gain); // also refreshes bar/label + skill dials (player side only)
+	getGameLayer()->syncDuelOugisFlags(this, side);
+}
+
+void CharacterBase::stopAIChargeChakra()
+{
+	if (!_isAIChargingChakra)
+		return;
+
+	_isAIChargingChakra = false;
+	_aiChakraChargeHeld = 0.f;
+	unschedule(schedule_selector(CharacterBase::updateAIChargeChakra));
 }
 
 void CharacterBase::increaseHpAndUpdateUI(uint32_t value)

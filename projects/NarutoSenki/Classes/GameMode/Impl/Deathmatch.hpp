@@ -40,7 +40,7 @@ private:
 	// you might've already fought as a normal opponent.
 	static const vector<string>& getBossList()
 	{
-		static const vector<string> bossList = { "Orochimaru", "Itachi", "Pain" };
+		static const vector<string> bossList = { "Orochimaru", "Itachi", "Pain", "Madara" };
 		return bossList;
 	}
 

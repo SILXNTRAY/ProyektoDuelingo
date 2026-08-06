@@ -1,5 +1,6 @@
 #include "Core/Hero.hpp"
 #include "HudLayer.h"
+#include "GameMode/GameModeImpl.h"
 
 bool HPBar::init(const char *szImage)
 {
@@ -275,7 +276,13 @@ void HPBar::loseHP(float percent)
 			if (_delegate->getName() == HeroEnum::Kakuzu && getGameLayer()->_isOugis2Game)
 			{
 				bool reieveAble = false;
-				if (_delegate->getCKR2() >= 25000 && _delegate->hearts > 0)
+				// Duel modes no longer track per-character CKR2 (see
+				// increaseAllCkrs' isDuelMode() branch) -- Kakuzu's own
+				// revive threshold isn't tied to skill5's cost, so it
+				// keeps checking the same 25000 mark, just against his
+				// side's shared pool instead of his own getCKR2().
+				uint32_t ckr2 = isDuelMode() ? getGameLayer()->getDuelChakra(_delegate->isPlayer()) : _delegate->getCKR2();
+				if (ckr2 >= 25000 && _delegate->hearts > 0)
 				{
 					if (_delegate->isPlayer())
 						reieveAble = true;

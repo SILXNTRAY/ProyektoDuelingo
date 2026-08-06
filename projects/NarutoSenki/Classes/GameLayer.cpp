@@ -610,6 +610,44 @@ void GameLayer::setCKRLose(bool isCRK2)
 	_hudLayer->setCKRLose(isCRK2);
 }
 
+void GameLayer::setDuelChakra(bool isPlayerSide, uint32_t value)
+{
+	_duelChakra[isPlayerSide ? 1 : 0] = (std::min)(value, kDuelChakraMax);
+
+	if (_hudLayer)
+	{
+		_hudLayer->setDuelChakraBarUI(isPlayerSide);
+
+		// Refresh the skill4/skill5 button dials too -- setCKRLose() is
+		// their only refresh trigger (see ActionButton::updateProgressMark),
+		// and every duel-chakra mutation (combat gains, AI/player casts,
+		// the ramen hold-charge) funnels through this one function, so
+		// hooking it here covers all of them without needing every call
+		// site to separately remember to call setCKRLose(). Only the
+		// player's own bank drives their own on-screen buttons.
+		if (isPlayerSide)
+		{
+			_hudLayer->setCKRLose(false);
+			_hudLayer->setCKRLose(true);
+		}
+	}
+}
+
+void GameLayer::addDuelChakra(bool isPlayerSide, uint32_t value)
+{
+	setDuelChakra(isPlayerSide, getDuelChakra(isPlayerSide) + value);
+}
+
+void GameLayer::syncDuelOugisFlags(CharacterBase* hero, bool isPlayerSide)
+{
+	if (!hero)
+		return;
+
+	uint32_t pool = getDuelChakra(isPlayerSide);
+	hero->_isCanOugis1 = pool >= kDuelSkill4Cost;
+	hero->_isCanOugis2 = pool >= kDuelSkill5Cost;
+}
+
 void GameLayer::setReport(const string& slayer, const string& dead, uint32_t killNum)
 {
 	_hudLayer->setReport(slayer, dead, killNum);
@@ -821,7 +859,19 @@ Hero* GameLayer::spawnAllyReplacement(const string& nextName, Role role, Group g
 	uint32_t restoredHp = (savedHpIt != hpMap.end()) ? (std::min)(savedHpIt->second, newMaxHP) : newMaxHP;
 	newHero->setHPValue(restoredHp, true);
 
-	newHero->increaseAllCkrs(25000);
+	// Duel modes (Boss/Deathmatch) use one shared chakra pool per side
+	// instead of per-character CKR/CKR2 (see GameLayer::kDuelChakraBarSize),
+	// so there's nothing to refill here -- the newly active hero just
+	// inherits whatever their side's pool currently reads, same as it
+	// was before the switch. Only the flags AI reads to decide whether
+	// it can throw skill4/5 need resyncing, since those default false on
+	// construction and would otherwise stay wrong until this specific
+	// character happens to gain chakra again.
+	if (isDuelMode())
+		syncDuelOugisFlags(newHero, isPlayerSide);
+	else
+		newHero->increaseAllCkrs(25000);
+
 	newHero->enableReborn = false;
 
 	return newHero;
@@ -1757,9 +1807,21 @@ void GameLayer::keyEventHandle(GLFWwindow* window, int key, int scancode, int ke
 		else
 			_gLayer->_isAttackButtonRelease = true;
 		break;
-	case KEY_L: // Ramen button
-		if (keyState)
+	case KEY_L: // Ramen button -- duel modes hold-to-charge instead of a
+	            // single-shot heal click (see ActionButton::ccTouchBegan/
+	            // ccTouchEnded for the touch equivalent). Outside duel
+	            // mode this keeps the old single-click heal behavior.
+		if (isDuelMode())
+		{
+			if (keyState)
+				_gLayer->_hudLayer->item1Button->startChakraCharge();
+			else
+				_gLayer->_hudLayer->item1Button->stopChakraCharge();
+		}
+		else if (keyState)
+		{
 			_gLayer->_hudLayer->item1Button->click();
+		}
 		break;
 	case KEY_H: // Ougis 2 buttons
 		if (keyState)
@@ -2003,9 +2065,20 @@ void GameLayer::keyEventHandle(int key, int keyState)
 		else
 			_gLayer->_isAttackButtonRelease = true;
 		break;
-	case KEY_L:
-		if (keyState)
+	case KEY_L: // Ramen button -- see the GLFW keyEventHandle() overload
+	            // above for why duel modes hold-to-charge instead of a
+	            // single click.
+		if (isDuelMode())
+		{
+			if (keyState)
+				_gLayer->_hudLayer->item1Button->startChakraCharge();
+			else
+				_gLayer->_hudLayer->item1Button->stopChakraCharge();
+		}
+		else if (keyState)
+		{
 			_gLayer->_hudLayer->item1Button->click();
+		}
 		break;
 	case KEY_H:
 		if (keyState)

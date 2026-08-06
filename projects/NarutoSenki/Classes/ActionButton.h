@@ -53,6 +53,17 @@ public:
 	void clearOugisMark();
 	void setGearType(GearType type);
 
+	// Duel-mode hold-to-charge: while the player holds item1Button down,
+	// this accumulates time and drives the shared chakra pool via a
+	// quadratic ramp (slow start → fast end). Only active in duel modes
+	// (Boss/Deathmatch) and only for the Item1 button. See
+	// ActionButton.cpp's updateChakraCharge() for the math.
+	float _chakraChargeHeld = 0.f; // seconds held so far this press
+	bool  _isChargingChakra = false;
+	void  startChakraCharge();
+	void  stopChakraCharge();
+	void  updateChakraCharge(float dt);
+
 	PROP_PTR(Action, _freezeAction, FreezeAction);
 	PROP(HudLayer *, _delegate, Delegate);
 	void beganAnimation(bool isLock = false);
@@ -74,6 +85,7 @@ protected:
 	void onExit();
 	bool ccTouchBegan(Touch *touch, Event *event);
 	void ccTouchEnded(Touch *touch, Event *event);
+	void ccTouchCancelled(Touch *touch, Event *event);
 
 	void createFreezeAnimation();
 	void clearClick();
