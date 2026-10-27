@@ -99,6 +99,12 @@ public:
 						return;
 					for (auto hero : layer->_CharacterArray)
 					{
+						// Benched allies get their own setup (see
+						// GameLayer::spawnBenchedAllies) -- the shared
+						// chakra grant below must only happen once per side.
+						if (hero->_isBenched)
+							continue;
+
 						hero->setCoin(3000);
 						hero->setEXP(2500);
 						for (int i = 1; i < 6; i++)
@@ -153,21 +159,6 @@ public:
 	{
 		if (!c->isPlayerOrCom())
 			return;
-
-		// A hero mid-retirement (see CharacterBase::_isRetiring — switched
-		// away from, finishing its current action under AI before it
-		// despawns on its own) still passes isPlayerOrCom() even after
-		// setRole(Role::Com), so it needs to be told apart from the
-		// actually-active hero dying: it's not the character being played
-		// right now, and forceSwitchOnDeath would incorrectly treat this
-		// like an active-hero death (hijacking control via an unwanted
-		// force-switch and corrupting the roster — see
-		// eliminateInactiveHero's comment for the full explanation).
-		if (c->_isRetiring)
-		{
-			getGameLayer()->eliminateInactiveHero(c);
-			return;
-		}
 
 		// Used to end the match immediately here (getGameLayer()->
 		// onGameOver(...)) -- now a death only eliminates that one

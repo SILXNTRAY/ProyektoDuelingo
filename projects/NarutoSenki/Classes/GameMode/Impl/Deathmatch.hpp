@@ -169,6 +169,12 @@ public:
 						return;
 					for (auto hero : layer->_CharacterArray)
 					{
+						// Benched allies get their own setup (see
+						// GameLayer::spawnBenchedAllies) -- the shared
+						// chakra grant below must only happen once per side.
+						if (hero->_isBenched)
+							continue;
+
 						hero->setCoin(3000);
 						hero->setEXP(2500);
 						for (int i = 1; i < 6; i++)
@@ -221,16 +227,6 @@ public:
 	{
 		if (!c->isPlayerOrCom())
 			return;
-
-		// Same distinction as Boss.hpp — a hero mid-retirement still
-		// passes isPlayerOrCom() but isn't the character actually being
-		// played right now; see eliminateInactiveHero's comment for why
-		// forceSwitchOnDeath would handle this incorrectly.
-		if (c->_isRetiring)
-		{
-			getGameLayer()->eliminateInactiveHero(c);
-			return;
-		}
 
 		// Used to end the stage immediately here (a single kill/death) --
 		// now a death only eliminates that one character and force-switches

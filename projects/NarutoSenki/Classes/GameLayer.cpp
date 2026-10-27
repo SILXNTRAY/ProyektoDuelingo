@@ -384,6 +384,11 @@ void GameLayer::initHeros()
 		i++;
 	}
 
+	// Duel modes: spawn the rest of both rosters now (benched -- invisible,
+	// invulnerable, no AI), so switching later never has to spawn anything.
+	if (isDuelMode())
+		spawnBenchedAllies();
+
 	// Tower HP bar color depends on currentPlayer group, so towers must be
 	// initialized after at least one hero/player is created.
 	if (!isDuelMode())
@@ -834,47 +839,184 @@ void GameLayer::attackButtonClick(ABType type)
 	}
 }
 
-// Shared "spawn and configure a new active hero" logic — see the comment
-// on the declaration in GameLayer.h.
-Hero* GameLayer::spawnAllyReplacement(const string& nextName, Role role, Group grp, Vec2 spawnPos, int charId, bool isPlayerSide)
+// ---------------------------------------------------------------------------
+// Duel-mode persistent roster -- see the comment on _allyHeroByKey in
+// GameLayer.h. Every roster hero is spawned once at match start and never
+// despawned by a switch; switching only toggles bench/active state.
+// ---------------------------------------------------------------------------
+
+string GameLayer::getRosterKey(Hero* hero, bool isPlayerSide)
 {
-	auto& hpMap = isPlayerSide ? _allyHpByName : _enemyAllyHpByName;
+	auto& heroMap = isPlayerSide ? _allyHeroByKey : _enemyHeroByKey;
+	for (auto& kv : heroMap)
+	{
+		if (kv.second == hero)
+			return kv.first;
+	}
+	return hero ? hero->getName() : string();
+}
 
-	Hero* newHero = addHero(nextName, role, grp, spawnPos, charId);
-	newHero->setWalkSpeed(newHero->_originSpeed);
+Hero* GameLayer::getActiveHero(bool isPlayerSide)
+{
+	auto& heroMap = isPlayerSide ? _allyHeroByKey : _enemyHeroByKey;
+	for (auto& kv : heroMap)
+	{
+		Hero* hero = kv.second;
+		if (hero && !hero->_isBenched && hero->getState() != State::DEAD)
+			return hero;
+	}
+	return nullptr;
+}
 
-	newHero->setCoin(3000);
-	newHero->setEXP(2500);
+void GameLayer::initBenchedHeroStats(Hero* hero, bool isPlayerSide)
+{
+	// Same loadout the active heroes get in Boss/Deathmatch's
+	// onHUDInitialized callback (level 6, 2x HP, no auto-reborn), minus the
+	// chakra grant: chakra is one shared pool per side, so it's only added
+	// once, by the active hero.
+	hero->setCoin(3000);
+	hero->setEXP(2500);
 	for (int i = 1; i < 6; i++)
-		newHero->changeHPbar();
-	uint32_t newMaxHP = newHero->getMaxHP() * 2;
-	newHero->setMaxHPValue(newMaxHP, false);
+		hero->changeHPbar();
 
-	// Restore this character's own persisted HP if they've been active
-	// earlier this match (i.e. switched away from before); otherwise this
-	// is their first time in and they start at full HP. Clamped to their
-	// current MaxHP in case some buff/level difference makes the saved
-	// value no longer valid.
-	auto savedHpIt = hpMap.find(nextName);
-	uint32_t restoredHp = (savedHpIt != hpMap.end()) ? (std::min)(savedHpIt->second, newMaxHP) : newMaxHP;
-	newHero->setHPValue(restoredHp, true);
+	hero->setCKR2(0);
+	hero->_isCanOugis2 = false;
 
-	// Duel modes (Boss/Deathmatch) use one shared chakra pool per side
-	// instead of per-character CKR/CKR2 (see GameLayer::kDuelChakraBarSize),
-	// so there's nothing to refill here -- the newly active hero just
-	// inherits whatever their side's pool currently reads, same as it
-	// was before the switch. Only the flags AI reads to decide whether
-	// it can throw skill4/5 need resyncing, since those default false on
-	// construction and would otherwise stay wrong until this specific
-	// character happens to gain chakra again.
-	if (isDuelMode())
-		syncDuelOugisFlags(newHero, isPlayerSide);
+	uint32_t newMaxHP = hero->getMaxHP() * 2;
+	hero->setMaxHPValue(newMaxHP, false);
+	hero->setHPValue(newMaxHP, true);
+
+	hero->enableReborn = false;
+
+	syncDuelOugisFlags(hero, isPlayerSide);
+}
+
+void GameLayer::spawnBenchedAllies()
+{
+	if (!isDuelMode() || !currentPlayer)
+		return;
+
+	_allyHeroByKey.clear();
+	_enemyHeroByKey.clear();
+	_benchedHeroes.clear();
+
+	Group playerGrp = currentPlayer->getGroup();
+	Group enemyGrp = (playerGrp == Group::Konoha) ? Group::Akatsuki : Group::Konoha;
+
+	// Register the two already-spawned active heroes.
+	Hero* playerHero = nullptr;
+	Hero* enemyHero = nullptr;
+	for (auto hero : _CharacterArray)
+	{
+		if (hero == currentPlayer)
+			playerHero = hero;
+		else if (!enemyHero && hero->isCom() && hero->getGroup() == enemyGrp && hero->isNotGuardian())
+			enemyHero = hero;
+	}
+	if (playerHero)
+		_allyHeroByKey[playerHero->getName()] = playerHero;
+	if (enemyHero)
+		_enemyHeroByKey[enemyHero->getName()] = enemyHero;
+
+	// Spawn every bench member, on the spot of their side's active hero (they
+	// get teleported to wherever the hero they replace stands when they're
+	// activated). Distinct charIds so the minimap can tell them apart.
+	vector<pair<Hero*, bool>> spawned;
+	int nextCharId = 100;
+
+	auto spawnSide = [&](const vector<string>& roster, Hero* anchor, Group grp, bool isPlayerSide)
+	{
+		if (!anchor)
+			return;
+		for (const auto& name : roster)
+		{
+			if (name.empty())
+				continue;
+			Hero* benched = addHero(name, Role::Com, grp, anchor->getPosition(), nextCharId++);
+			if (!benched)
+				continue;
+			benched->enableReborn = false;
+			// Setup (level/HP) needs the HUD, so it's deferred below. Bench it
+			// right away though so it's never visible/targetable/AI-driven,
+			// not even for a frame.
+			benched->enterBench();
+			(isPlayerSide ? _allyHeroByKey : _enemyHeroByKey)[name] = benched;
+			_benchedHeroes.push_back(benched);
+			spawned.push_back({ benched, isPlayerSide });
+		}
+	};
+	spawnSide(_allyRoster, playerHero, playerGrp, true);
+	spawnSide(_enemyAllyRoster, enemyHero, enemyGrp, false);
+
+	// Benched heroes stay in _CharacterArray until the HUD is up: its minimap
+	// builds one icon per hero in that array (hidden for benched ones, see
+	// HudLayer), and level/HP setup needs the HUD. Right after that they
+	// leave the array for good, which is what makes every "loop over all
+	// heroes" targeting/AoE/buff routine ignore them.
+	onHUDInitialized(
+		[this, spawned]()
+		{
+			for (auto& entry : spawned)
+			{
+				initBenchedHeroStats(entry.first, entry.second);
+				std::erase(_CharacterArray, entry.first);
+			}
+		});
+}
+
+void GameLayer::benchHero(Hero* hero)
+{
+	if (!hero)
+		return;
+	hero->enterBench();
+	std::erase(_CharacterArray, hero);
+	_benchedHeroes.push_back(hero);
+}
+
+// Brings `hero` (currently benched) onto the field at `pos`, facing
+// `flipped` -- i.e. where the hero it replaces was standing (a switched-out
+// hero, or one that just died). Control (player side) or AI (enemy side) is
+// handed over. Nothing is spawned or despawned here.
+void GameLayer::activateHero(Hero* hero, const Vec2& pos, bool flipped, bool isPlayerSide)
+{
+	if (!hero)
+		return;
+
+	std::erase(_benchedHeroes, hero);
+	hero->leaveBench(pos, flipped);
+	if (std::find(_CharacterArray.begin(), _CharacterArray.end(), hero) == _CharacterArray.end())
+		_CharacterArray.push_back(hero);
+
+	// Walk speed is 0 until game start for every hero that was in the array
+	// then; benched heroes were already out of it.
+	hero->setWalkSpeed(hero->_originSpeed);
+	hero->enableReborn = false;
+
+	// Chakra is a shared pool, so just resync which ultimates this hero's
+	// AI/UI considers available.
+	syncDuelOugisFlags(hero, isPlayerSide);
+
+	if (isPlayerSide)
+	{
+		hero->setRole(Role::Player);
+		hero->_isAI = false;
+		currentPlayer = hero;
+
+		// The HP bar sprite was chosen by role when the hero spawned
+		// (benched allies got the ally-AI one); rebuild it for the player.
+		if (hero->_hpBar)
+		{
+			hero->_hpBar->removeFromParent();
+			hero->_hpBar = nullptr;
+		}
+		hero->setHPbar();
+		hero->setHPValue(hero->getHP(), true);
+	}
 	else
-		newHero->increaseAllCkrs(25000);
-
-	newHero->enableReborn = false;
-
-	return newHero;
+	{
+		hero->setRole(Role::Com);
+		hero->doAI();
+	}
 }
 
 bool GameLayer::isRosterNameEliminated(const string& name, bool isPlayerSide)
@@ -883,140 +1025,126 @@ bool GameLayer::isRosterNameEliminated(const string& name, bool isPlayerSide)
 	return eliminated.find(name) != eliminated.end();
 }
 
+// Updates the player-side HUD for a newly controlled hero. Shared by a
+// voluntary switch and a death-triggered force-switch.
+static void refreshPlayerHudForHero(GameLayer* gl, Hero* newHero, const string& newKey)
+{
+	// The outgoing hero may have been mid-skill when it was benched; its
+	// idle() (which normally flips this back) ran as a non-player, so make
+	// sure the HUD isn't left waiting on a skill that will never "finish".
+	gl->setSkillFinish(true);
+
+	auto hud = gl->getHudLayer();
+	hud->setEXPLose();
+	hud->coinLabel->setString(to_cstr(newHero->getCoin()));
+	if (!newHero->isEnableSkill04())
+		hud->skill4Button->setLock();
+	if (!newHero->isEnableSkill05())
+		hud->skill5Button->setLock();
+
+	hud->initGearButton(newKey);
+	hud->updateSkillButtons();
+	hud->resetSkillButtons();
+
+	// newHero's HP lives on the hero itself -- reflect it on the HUD bar.
+	gl->setHPLose(newHero->getHpPercent());
+}
+
 void GameLayer::switchToAllySlot(int slotIndex)
 {
 	if (slotIndex < 0 || slotIndex >= (int)_allyRoster.size() || !currentPlayer || currentPlayer->getState() == State::DEAD)
 		return;
 
-	string nextName = _allyRoster[slotIndex];
+	string nextKey = _allyRoster[slotIndex];
 
-	// Can't switch into an eliminated slot — same defense-in-depth as the
-	// DEAD check above; the HUD button should already refuse this click
-	// (see HudLayer::updateAllySwitchButtons / ActionButton::isCanClick),
-	// but guard the actual swap logic too.
-	if (isRosterNameEliminated(nextName, true))
+	// Can't switch into an eliminated slot -- the HUD button should already
+	// refuse this click (see HudLayer::updateAllySwitchButtons /
+	// ActionButton::isCanClick), but guard the actual swap logic too.
+	if (isRosterNameEliminated(nextKey, true))
 		return;
 
+	auto it = _allyHeroByKey.find(nextKey);
+	if (it == _allyHeroByKey.end() || !it->second || it->second->getState() == State::DEAD)
+		return;
+
+	Hero* newHero = it->second;
 	Hero* oldHero = (Hero*)currentPlayer;
-	Vec2 swapPos = oldHero->getPosition();
-	Group grp = oldHero->getGroup();
-	int oldCharId = oldHero->getCharId();
+	if (newHero == oldHero)
+		return;
+
+	string oldKey = getRosterKey(oldHero, true);
 
 	oldHero->setSkillEffect("smk");
 
-	string oldName = oldHero->getName();
+	// Nothing is despawned: the outgoing hero (and its summons/puppets) just
+	// goes invisible, invulnerable, AI-less and frozen on the bench; the
+	// incoming one is un-benched where the outgoing hero stood, and gets
+	// control. HP, buffs, etc. simply stay on each hero object.
+	//
+	// Order matters: activate first (it reads oldHero's position/facing),
+	// bench after.
+	activateHero(newHero, oldHero->getPosition(), oldHero->_isFlipped, true);
+	benchHero(oldHero);
 
-	// Save the outgoing hero's current HP against their own name, so it's
-	// restored (rather than some other character inheriting it as a
-	// percentage, or it resetting to full) if/when they get switched back
-	// to later in the match.
-	_allyHpByName[oldName] = oldHero->getHP();
+	_allyRoster[slotIndex] = oldKey;
 
-	// oldHero isn't torn down here anymore — control moves to newHero
-	// immediately below (addHero sets currentPlayer as soon as it spawns),
-	// but oldHero itself is handed to AI and left on the field to finish
-	// whatever it was doing (idle, walking, or mid-skill/attack) before it
-	// despawns on its own. This is what lets Chiyo keep her Parents puppet
-	// alive and Lee finish a combo instead of having both cut off mid-
-	// action, and it's why the mid-attack switch guard that used to be here
-	// is gone — switching no longer interrupts anything.
-	oldHero->retireAndDespawnWhenIdle();
-
-	_allyRoster[slotIndex] = oldName;
-
-	Hero* newHero = spawnAllyReplacement(nextName, Role::Player, grp, swapPos, oldCharId, true);
-
-	_hudLayer->setEXPLose();
-	_hudLayer->coinLabel->setString(to_cstr(newHero->getCoin()));
-	if (!newHero->isEnableSkill04())
-		_hudLayer->skill4Button->setLock();
-	if (!newHero->isEnableSkill05())
-		_hudLayer->skill5Button->setLock();
-
-	_hudLayer->initGearButton(nextName);
-	_hudLayer->updateSkillButtons();
-	_hudLayer->resetSkillButtons();
+	refreshPlayerHudForHero(this, newHero, nextKey);
 
 	ActionButton* swappedButton = (slotIndex == 0) ? _hudLayer->allySwitch1Button : _hudLayer->allySwitch2Button;
 	if (swappedButton)
 	{
-		auto newFrame = getSpriteFrame("{}_rp.png", oldName);
+		auto newFrame = getSpriteFrame("{}_rp.png", oldKey);
 		if (newFrame)
 			swappedButton->setDisplayFrame(newFrame);
-		// Only the slot actually used gets the full ~15s recharge here —
-		// the other slot's separate 0.5s "just switched" lock is applied
-		// in attackButtonClick instead (see the comment there). This used
-		// to call beganAnimation() on BOTH buttons unconditionally, which
-		// is what put both slots on the full 15s cooldown together no
-		// matter which one was clicked.
+		// Only the slot actually used gets the full ~15s recharge here --
+		// the other slot's separate 0.5s "just switched" lock is applied in
+		// attackButtonClick instead.
 		swappedButton->beganAnimation();
 	}
-
-	// newHero's HP is now independent of oldHero's — reflect newHero's own
-	// (restored) percentage on the HUD bar, not oldHero's.
-	setHPLose(newHero->getHpPercent());
 }
 
 
 // AI-side mirror of switchToAllySlot above, operating on the enemy hero
 // and _enemyAllyRoster instead of the player. Kept separate rather than
 // unified with a parameter, since the two sides update different HUD
-// elements (skill/gear buttons vs. the cosmetic enemy icons) and swap in
-// as different Roles (Player vs Com).
+// elements (skill/gear buttons vs. the cosmetic enemy icons) and take
+// control as different Roles (Player vs Com + AI).
 void GameLayer::switchEnemyAllySlot(int slotIndex)
 {
 	if (slotIndex < 0 || slotIndex >= (int)_enemyAllyRoster.size())
 		return;
 
-	// Can't switch into an eliminated slot — mirrors the player-side guard
-	// in switchToAllySlot.
-	if (isRosterNameEliminated(_enemyAllyRoster[slotIndex], false))
+	string nextKey = _enemyAllyRoster[slotIndex];
+
+	// Can't switch into an eliminated slot -- mirrors the player-side guard.
+	if (isRosterNameEliminated(nextKey, false))
 		return;
 
-	Group enemyGrp = (playerGroup == Group::Konoha) ? Group::Akatsuki : Group::Konoha;
-	Hero* oldHero = nullptr;
-	for (auto hero : _CharacterArray)
-	{
-		// Same _isRetiring skip as updateEnemyAllySwitch — don't pick an
-		// already-retiring hero as the thing to switch out again.
-		if (hero->isCom() && hero->getGroup() == enemyGrp && hero->getState() != State::DEAD && !hero->_isRetiring)
-		{
-			oldHero = hero;
-			break;
-		}
-	}
-	if (!oldHero)
+	auto it = _enemyHeroByKey.find(nextKey);
+	if (it == _enemyHeroByKey.end() || !it->second || it->second->getState() == State::DEAD)
 		return;
 
-	Vec2 swapPos = oldHero->getPosition();
-	Group grp = oldHero->getGroup();
-	int oldCharId = oldHero->getCharId();
+	Hero* oldHero = getActiveHero(false);
+	Hero* newHero = it->second;
+	if (!oldHero || newHero == oldHero)
+		return;
+
+	string oldKey = getRosterKey(oldHero, false);
 
 	oldHero->setSkillEffect("smk");
-	string oldName = oldHero->getName();
-	string nextName = _enemyAllyRoster[slotIndex];
 
-	// Same per-name HP persistence as switchToAllySlot — see the comments
-	// there.
-	_enemyAllyHpByName[oldName] = oldHero->getHP();
+	activateHero(newHero, oldHero->getPosition(), oldHero->_isFlipped, false);
+	benchHero(oldHero);
 
-	// Same retire-instead-of-despawn handoff as switchToAllySlot — see the
-	// comments there. oldHero stays on the field under AI (it's already
-	// Role::Com so no role change is needed here) and despawns itself once
-	// its current action finishes.
-	oldHero->retireAndDespawnWhenIdle();
+	_enemyAllyRoster[slotIndex] = oldKey;
 
-	_enemyAllyRoster[slotIndex] = oldName;
-
-	Hero* newHero = spawnAllyReplacement(nextName, Role::Com, grp, swapPos, oldCharId, false);
-	newHero->doAI();
-
-	_hudLayer->refreshEnemyAvatar(nextName);
+	_hudLayer->refreshEnemyAvatar(nextKey);
+	setEnemyHPLose(newHero->getHpPercent());
 
 	Sprite* swappedIcon = (slotIndex == 0) ? _hudLayer->enemyAllyIcon1 : _hudLayer->enemyAllyIcon2;
 	if (swappedIcon)
 	{
-		auto newFrame = getSpriteFrame("{}_rp.png", oldName);
+		auto newFrame = getSpriteFrame("{}_rp.png", oldKey);
 		if (newFrame)
 			swappedIcon->setDisplayFrame(newFrame);
 	}
@@ -1032,7 +1160,7 @@ void GameLayer::despawnDeadHero(CharacterBase* deadHero)
 
 	deadHero->setSkillEffect("smk");
 
-	// Same dependent cleanup as CharacterBase::despawnRetiredHero() — a
+	// Dependent cleanup for a dying owner -- a
 	// summon/puppet still alive when its owner dies (e.g. Chiyo dying with
 	// Parents still up) would otherwise be left with a dangling master,
 	// the same class of bug fixed for Sai's Ink Dragon and Sasuke's
@@ -1096,34 +1224,14 @@ void GameLayer::forceSwitchOnDeath(CharacterBase* deadHero)
 	info.position = deadHero->getPosition();
 	info.charId = deadHero->getCharId();
 	info.hero = deadHero;
-	info.wasRetiring = false;
 	_pendingDeaths.push_back(info);
 
-	scheduleOnce(schedule_selector(GameLayer::processPendingDeaths), 0.0f);
-}
-
-void GameLayer::eliminateInactiveHero(CharacterBase* deadHero)
-{
-	PendingDeathInfo info;
-	info.name = deadHero->getName();
-	info.group = deadHero->getGroup();
-	info.position = deadHero->getPosition();
-	info.charId = deadHero->getCharId();
-	info.hero = deadHero;
-	info.wasRetiring = true;
-	_pendingDeaths.push_back(info);
-
-	// Same one-frame defer as forceSwitchOnDeath, same reasoning — this
-	// runs from onCharacterDead(), the very first line of dead(), before
-	// dead()'s own later body (HP bar clearing etc, operating on `this`)
-	// has run. despawnDeadHero() below would otherwise get clobbered a
-	// moment later by that tail.
 	scheduleOnce(schedule_selector(GameLayer::processPendingDeaths), 0.0f);
 }
 
 void GameLayer::processPendingDeaths(float dt)
 {
-	// Snapshot and clear up front — onGameOver() below can trigger a
+	// Snapshot and clear up front -- onGameOver() below can trigger a
 	// teardown that ends up touching this vector again, and a stray
 	// double-death in the same frame (both duelists going down at once,
 	// e.g. a mutual-kill hit) shouldn't get processed twice.
@@ -1132,34 +1240,19 @@ void GameLayer::processPendingDeaths(float dt)
 
 	for (auto& info : pending)
 	{
-		// A retiring hero dying is never "the last of that side" and
-		// never touches currentPlayer/onGameOver — see the comment on
-		// eliminateInactiveHero's declaration for why. Just mark it
-		// eliminated and despawn it, skip the force-switch machinery
-		// entirely.
-		if (info.wasRetiring)
-		{
-			bool isPlayerSideRetiring = info.group == playerGroup;
-			auto& eliminatedRetiring = isPlayerSideRetiring ? _eliminatedAllies : _eliminatedEnemyAllies;
-			auto& hpMapRetiring = isPlayerSideRetiring ? _allyHpByName : _enemyAllyHpByName;
-
-			eliminatedRetiring.insert(info.name);
-			hpMapRetiring.erase(info.name);
-
-			despawnDeadHero(info.hero);
-			continue;
-		}
-
 		bool isPlayerSide = info.group == playerGroup;
 		auto& eliminated = isPlayerSide ? _eliminatedAllies : _eliminatedEnemyAllies;
 		auto& roster = isPlayerSide ? _allyRoster : _enemyAllyRoster;
-		auto& hpMap = isPlayerSide ? _allyHpByName : _enemyAllyHpByName;
+		auto& heroMap = isPlayerSide ? _allyHeroByKey : _enemyHeroByKey;
 
-		eliminated.insert(info.name);
-		// No longer relevant -- this name can never be switched to again
-		// this match (see isRosterNameEliminated), so there's nothing left
-		// to restore HP for.
-		hpMap.erase(info.name);
+		// Roster key of the hero that just died (stable even if it had
+		// transformed -- getName() might be "SageNaruto" by now).
+		string deadKey = getRosterKey((Hero*)info.hero, isPlayerSide);
+
+		eliminated.insert(deadKey);
+		// The dead hero is the one thing that does get despawned, so drop
+		// it from the roster map before the pointer goes away.
+		heroMap.erase(deadKey);
 
 		int nextSlot = -1;
 		for (int i = 0; i < (int)roster.size(); i++)
@@ -1182,8 +1275,8 @@ void GameLayer::processPendingDeaths(float dt)
 		// this whole system bypasses).
 		//
 		// In the normal force-switch case (isFinalDeath == false) that's
-		// fine to just null out -- spawnAllyReplacement()'s addHero() call
-		// reassigns currentPlayer to the new hero moments later anyway.
+		// fine to just null out -- activateHero() below reassigns
+		// currentPlayer to the newly active hero.
 		//
 		// On the player's actual final death though, nothing else ever
 		// reassigns currentPlayer afterward, and GameOver's result screen
@@ -1192,9 +1285,10 @@ void GameLayer::processPendingDeaths(float dt)
 		// just its name) to build the screen -- a name-only fallback can't
 		// cover that. So instead of nulling it, keep the object itself
 		// alive with an extra retain() (released in ~GameLayer(), see
-		// _currentPlayerIsExtraRetained) — it's still fully removed from
+		// _currentPlayerIsExtraRetained) -- it's still fully removed from
 		// the scene/inert either way, this only affects whether the
 		// pointer stays valid for GameOver to read from afterward.
+		bool deadFlipped = info.hero->_isFlipped; // read before despawn may free it
 		bool keepAlive = isFinalDeath && isPlayerSide && isCurrentPlayer;
 		if (keepAlive)
 		{
@@ -1220,8 +1314,8 @@ void GameLayer::processPendingDeaths(float dt)
 			onGameOver(!isPlayerSide);
 			// onGameOver() just pushed a whole new Scene (the GameOver
 			// screen) via Director::pushScene(). If a second entry in this
-			// same batch also eliminated its side — a mutual kill landing
-			// on both duelists' last characters in the same frame — calling
+			// same batch also eliminated its side -- a mutual kill landing
+			// on both duelists' last characters in the same frame -- calling
 			// onGameOver() again here would run its scene-snapshot logic
 			// against the GameOver scene instead of the game scene it
 			// expects, and the unconditional cast of that scene's first
@@ -1230,56 +1324,50 @@ void GameLayer::processPendingDeaths(float dt)
 			return;
 		}
 
-		string nextName = roster[nextSlot];
-		// Leave the dead character's name sitting in this slot rather than
+		string nextKey = roster[nextSlot];
+		// Leave the dead character's key sitting in this slot rather than
 		// clearing it -- doesn't change what's switchable (that's gated on
 		// the elimination set, not roster slot contents), just keeps the
 		// slot as a visible record of who died there instead of going
 		// blank.
-		roster[nextSlot] = info.name;
+		roster[nextSlot] = deadKey;
+
+		auto nextIt = heroMap.find(nextKey);
+		Hero* newHero = (nextIt != heroMap.end()) ? nextIt->second : nullptr;
+		if (!newHero)
+			continue;
+
+		// The already-spawned bench member takes the dead hero's place --
+		// nothing new is spawned.
+		activateHero(newHero, info.position, deadFlipped, isPlayerSide);
 
 		if (isPlayerSide)
 		{
-			Hero* newHero = spawnAllyReplacement(nextName, Role::Player, info.group, info.position, info.charId, true);
-
-			_hudLayer->setEXPLose();
-			_hudLayer->coinLabel->setString(to_cstr(newHero->getCoin()));
-			if (!newHero->isEnableSkill04())
-				_hudLayer->skill4Button->setLock();
-			if (!newHero->isEnableSkill05())
-				_hudLayer->skill5Button->setLock();
-
-			_hudLayer->initGearButton(nextName);
-			_hudLayer->updateSkillButtons();
-			_hudLayer->resetSkillButtons();
+			refreshPlayerHudForHero(this, newHero, nextKey);
 
 			ActionButton* swappedButton = (nextSlot == 0) ? _hudLayer->allySwitch1Button : _hudLayer->allySwitch2Button;
 			if (swappedButton)
 			{
-				auto newFrame = getSpriteFrame("{}_rp.png", info.name);
+				auto newFrame = getSpriteFrame("{}_rp.png", deadKey);
 				if (newFrame)
 					swappedButton->setDisplayFrame(newFrame);
-				// Deliberately no beganAnimation() here — this slot is
+				// Deliberately no beganAnimation() here -- this slot is
 				// eliminated now, it should stay locked for the rest of
 				// the match regardless of cooldown state (see
 				// HudLayer::updateAllySwitchButtons / ActionButton's
 				// isCanClick, both of which check isRosterNameEliminated
 				// directly rather than relying on the button's own CD).
 			}
-
-			setHPLose(newHero->getHpPercent());
 		}
 		else
 		{
-			Hero* newHero = spawnAllyReplacement(nextName, Role::Com, info.group, info.position, info.charId, false);
-			newHero->doAI();
-
-			_hudLayer->refreshEnemyAvatar(nextName);
+			_hudLayer->refreshEnemyAvatar(nextKey);
+			setEnemyHPLose(newHero->getHpPercent());
 
 			Sprite* swappedIcon = (nextSlot == 0) ? _hudLayer->enemyAllyIcon1 : _hudLayer->enemyAllyIcon2;
 			if (swappedIcon)
 			{
-				auto newFrame = getSpriteFrame("{}_rp.png", info.name);
+				auto newFrame = getSpriteFrame("{}_rp.png", deadKey);
 				if (newFrame)
 					swappedIcon->setDisplayFrame(newFrame);
 			}
@@ -1299,27 +1387,12 @@ void GameLayer::updateEnemyAllySwitch(float dt)
 	if (_enemyAllySwitchCooldown > 0.0f)
 		return;
 
-	Group enemyGrp = (playerGroup == Group::Konoha) ? Group::Akatsuki : Group::Konoha;
-	Hero* enemyHero = nullptr;
-	for (auto hero : _CharacterArray)
-	{
-		// Skip _isRetiring heroes — they're still Role::Com and still in
-		// _CharacterArray until their despawn poll finishes, but they're not
-		// the "real" active enemy hero anymore and shouldn't be picked as
-		// the target of a fresh switch decision.
-		if (hero->isCom() && hero->getGroup() == enemyGrp && hero->getState() != State::DEAD && !hero->_isRetiring)
-		{
-			enemyHero = hero;
-			break;
-		}
-	}
+	Hero* enemyHero = getActiveHero(false);
 	if (!enemyHero)
 		return;
 
-	// No more mid-attack/cBuff gating here — switching no longer interrupts
-	// or gets blocked by whatever enemyHero is doing (see
-	// CharacterBase::retireAndDespawnWhenIdle / switchEnemyAllySlot). It
-	// just hands enemyHero to AI and lets it finish naturally.
+	// Switching never interrupts or gets blocked by whatever enemyHero is
+	// doing -- it just goes to the bench (see switchEnemyAllySlot).
 	vector<int> availableSlots;
 	for (int i = 0; i < (int)_enemyAllyRoster.size(); i++)
 	{
@@ -1469,7 +1542,11 @@ void GameLayer::onLeft()
 	// of those screens to reload them.
 	if (!_quickRestartDeathmatch)
 	{
-		LoadLayer::unloadAllCharsIMG(_CharacterArray);
+		// Benched duel heroes aren't in _CharacterArray -- unload their
+		// images too.
+		vector<Hero*> allHeroes = _CharacterArray;
+		allHeroes.insert(allHeroes.end(), _benchedHeroes.begin(), _benchedHeroes.end());
+		LoadLayer::unloadAllCharsIMG(allHeroes);
 		// AFTER
 		if (!isDuelMode())
 			removeSprites(format("Unit/Tower/Tower{}.plist", mapId));
@@ -1487,6 +1564,9 @@ void GameLayer::onLeft()
 	}
 
 	_CharacterArray.clear();
+	_benchedHeroes.clear();
+	_allyHeroByKey.clear();
+	_enemyHeroByKey.clear();
 	_TowerArray.clear();
 	_KonohaFlogArray.clear();
 	_AkatsukiFlogArray.clear();

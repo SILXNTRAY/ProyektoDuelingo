@@ -119,41 +119,13 @@ public:
 		// between forceSwitchOnDeath() queuing this and processPendingDeaths
 		// picking it back up next frame.
 		CharacterBase* hero;
-		// True if this hero was mid-retirement (CharacterBase::_isRetiring)
-		// at the moment it died — captured synchronously in
-		// forceSwitchOnDeath()/eliminateInactiveHero() rather than
-		// re-checked later, since checkRetireFinish() resets _isRetiring to
-		// false as soon as it sees State::DEAD, before this queue is even
-		// processed. Tells processPendingDeaths to just eliminate the name
-		// and despawn the body, without force-switching or touching
-		// currentPlayer/onGameOver — see eliminateInactiveHero's comment
-		// for why a retiring hero's death can never legitimately trigger
-		// either of those.
-		bool wasRetiring;
 	};
 	vector<PendingDeathInfo> _pendingDeaths;
 	void forceSwitchOnDeath(CharacterBase* deadHero);
-	// Handles a *retiring* hero (see CharacterBase::_isRetiring) dying
-	// before it finishes despawning on its own — e.g. switched away from,
-	// left defenseless while it winds down, and killed by the enemy in
-	// the meantime. This can never be "the last of that side" (the hero
-	// that's currently active, plus whichever roster slot wasn't just
-	// switched from, are structurally still alive whenever a retiring
-	// hero exists at all), so unlike forceSwitchOnDeath this never
-	// force-switches or ends the match — it just marks the name
-	// permanently eliminated and despawns the body. Calling
-	// forceSwitchOnDeath here instead would incorrectly treat this like
-	// the active hero dying: it'd force-switch to the other bench slot
-	// (hijacking control away from whoever's actually being played) and
-	// write the same eliminated name into both roster slots at once
-	// (the one this hero already occupied, plus the one it just got
-	// force-switched into) — surfacing as both switch buttons showing
-	// the dead hero's portrait and being locked.
-	void eliminateInactiveHero(CharacterBase* deadHero);
-	// Plays the same "smk" (smoke) poof effect used when a hero retires on
-	// a voluntary switch, then immediately removes the body. Needed
+	// Plays the same "smk" (smoke) poof effect used on a switch, then
+	// immediately removes the body. Needed
 	// because enableReborn = false (set on every duel-mode hero — see
-	// spawnAllyReplacement/onCharacterInit) means Hero::reborn()'s usual
+	// spawnBenchedAllies/onCharacterInit) means Hero::reborn()'s usual
 	// cleanup path — which normally removes a dead hero's body once its
 	// reborn countdown finishes — never runs at all, leaving the corpse
 	// stuck on-screen forever under a frozen skull overlay that never
@@ -161,23 +133,41 @@ public:
 	void despawnDeadHero(CharacterBase* deadHero);
 	void processPendingDeaths(float dt);
 
-	// Per-character HP persistence across switches, keyed by character
-	// name. Saved (as an absolute value, against that character's own 2x
-	// MaxHP) the moment a character leaves the active slot, and restored
-	// instead of inheriting whatever percentage the outgoing character
-	// happened to be at. A name with no entry yet means "hasn't been
-	// played this match" -> spawns at full HP.
-	unordered_map<string, uint32_t> _allyHpByName;
-	unordered_map<string, uint32_t> _enemyAllyHpByName;
+	// --- Duel-mode persistent roster (Boss/Deathmatch) ---
+	//
+	// Every roster character (the active one plus the two benched ones, on
+	// both sides) is spawned at match start and stays spawned. A switch never
+	// despawns or respawns anything: the outgoing hero is *benched*
+	// (CharacterBase::enterBench -- invisible, invulnerable, no AI, frozen)
+	// and the incoming one is *activated* (CharacterBase::leaveBench -- made
+	// visible/vulnerable again, teleported to where the outgoing hero was, and
+	// handed control / AI). Only a dead hero is despawned.
+	//
+	// Heroes are keyed by the name they were spawned with (the same strings
+	// that live in _allyRoster/_enemyAllyRoster and the eliminated sets), NOT
+	// by getName(), which changes when a hero transforms (SageNaruto, ...).
+	// HP, buffs, cooldowns, etc. simply stay on the Hero object across swaps.
+	//
+	// Benched heroes are removed from _CharacterArray, so none of the many
+	// "loop over every hero" targeting/AoE/buff routines can see them.
+	unordered_map<string, Hero*> _allyHeroByKey;
+	unordered_map<string, Hero*> _enemyHeroByKey;
+	vector<Hero*> _benchedHeroes; // benched heroes of both sides (owners of nothing, just for teardown)
 
-	// Shared "spawn and configure a new active hero" logic used by both a
-	// voluntary switch and a death-triggered force-switch. Restores
-	// nextName's persisted HP (see _allyHpByName/_enemyAllyHpByName above)
-	// instead of inheriting a percentage from whoever's being replaced.
-	// Doesn't touch the outgoing character at all — callers handle that
-	// themselves (retiring for a voluntary switch; already mid-death and
-	// self-cleaning-up for a death).
-	Hero* spawnAllyReplacement(const string& nextName, Role role, Group grp, Vec2 spawnPos, int charId, bool isPlayerSide);
+	// Spawns both sides' benched roster members next to their active hero,
+	// registers every roster hero in the maps above, and benches the extras.
+	// Called once from initHeros() after the active heroes exist.
+	void spawnBenchedAllies();
+	// Gives a freshly spawned benched hero the same duel loadout the active
+	// heroes get (level 6, 2x HP, ...) -- run from onHUDInitialized.
+	void initBenchedHeroStats(Hero* hero, bool isPlayerSide);
+	// Bench / activate primitives shared by voluntary and forced switches.
+	void benchHero(Hero* hero);
+	void activateHero(Hero* hero, const Vec2& pos, bool flipped, bool isPlayerSide);
+	// Roster key (see above) of a hero, or its getName() if it's not in the map.
+	string getRosterKey(Hero* hero, bool isPlayerSide);
+	// Hero currently active (not benched, not dead) on a side, or nullptr.
+	Hero* getActiveHero(bool isPlayerSide);
 
 	uint32_t _second;
 	uint32_t _minute;

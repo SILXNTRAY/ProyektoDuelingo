@@ -431,6 +431,12 @@ void CharacterBase::updateHpBarPosition(float dt)
 
 void CharacterBase::acceptAttack(Ref *object)
 {
+	// Benched heroes (duel modes) are invulnerable -- they're also out of
+	// GameLayer::_CharacterArray, but they stay registered as notification
+	// observers while frozen, so refuse here too.
+	if (_isBenched)
+		return;
+
 	auto attacker = (CharacterBase *)object;
 	bool isCannotMiss = false;
 
@@ -4002,22 +4008,6 @@ bool CharacterBase::checkHasMovement()
 
 void CharacterBase::idle()
 {
-	// Every attack/skill/hurt/knockdown/etc sequence in this codebase
-	// ultimately calls idle() as its "I'm done, back to rest" signal — the
-	// same trust the rest of the code already places in it. For a retiring
-	// hero (see retireAndDespawnWhenIdle), that's the definitive point to
-	// despawn instead of actually going idle. This is more precise than
-	// polling _state from the outside would be: some skills pass through
-	// an intermediate JUMP state mid-sequence (the jump portion of the
-	// skill, not the whole thing), and _state alone can't tell "mid-skill
-	// jump" apart from "the skill's actually over," but idle() only ever
-	// gets called at the latter.
-	if (_isRetiring && _state != State::DEAD)
-	{
-		despawnRetiredHero();
-		return;
-	}
-
 	if (_state != State::IDLE && _state != State::DEAD)
 	{
 		_state = State::IDLE;
@@ -4676,167 +4666,76 @@ void CharacterBase::checkActionFinish(float dt)
 	}
 }
 
-// Called on the hero being switched out. Unlike an immediate despawn, this
-// lets it keep fighting under AI control (same _group, so it stays a
-// friendly) until whatever it's currently doing — a skill/attack animation,
-// or nothing at all — actually finishes, and only then tears it down. This
-// is what lets Chiyo keep her Parents puppet up and Lee finish a combo
-// instead of having both yanked off-screen mid-action.
-void CharacterBase::retireAndDespawnWhenIdle()
+// Duel-mode bench. The hero stays spawned the whole time -- it is only made
+// invisible, invulnerable, AI-less and frozen. Nothing is despawned here,
+// not the hero and not its summons/puppets (only a dead hero is ever
+// despawned, see GameLayer::despawnDeadHero).
+void CharacterBase::enterBench()
 {
-	if (_isRetiring)
+	if (_isBenched || _state == State::DEAD)
 		return;
 
-	_isRetiring = true;
-	_retireElapsed = 0.0f;
-
-	// Some characters' cBuffs don't just hold a flag — they schedule their
-	// own ongoing side effects for as long as the buff is active (Sai's
-	// _skillChangeBuffValue==18 "ink beast" stance, for example, schedules
-	// a repeating setMonPer() every 0.5s that keeps spawning new
-	// master-linked mice). Those buffs are also part of the same "never
-	// auto-expires on a timer" group as Chiyo/Lee (see setBuff's cBuff
-	// branch) — nothing would stop that schedule on its own while this
-	// hero sits around retiring, so it'd keep spawning more mice tied to a
-	// hero that's about to be torn down, some of which could still be
-	// mid-spawn or attacking after despawnRetiredHero() already ran.
-	// setActionResume() is each character's own "cleanly end my current
-	// buff/stance right now" hook (already used for this exact purpose
-	// elsewhere) — it's a safe no-op for characters with nothing active,
-	// so calling it unconditionally here just makes sure nothing like that
-	// is still ticking before this hero starts finishing up.
+	// Some characters' cBuffs schedule their own repeating side effects for
+	// as long as the buff is active (e.g. Sai's ink-beast stance keeps
+	// spawning mice). setActionResume() is each character's own "cleanly end
+	// my current buff/stance" hook, a safe no-op for everyone else, so a
+	// benched hero isn't left running something in the background.
 	setActionResume();
 
-	setRole(Role::Com);
-	doAI();
+	// A benched hero is never player-controlled, whichever side it's on.
+	if (isPlayer())
+		setRole(Role::Com);
+	_isControlled = false;
+	_isAI = false;
 
-	// The minimap's MiniIcon widgets match themselves to a character purely
-	// by charId (see MiniIcon::updateMap), and switchToAllySlot hands the
-	// new hero this same charId so it inherits the ally's map icon. While
-	// both this retiring hero and the new one are alive and moving, sharing
-	// that id would make the one icon flicker between both of their
-	// positions. -1 is never assigned to a real character (see addHero /
-	// guardian/tower spawn code — all use 1-based or size-based positive
-	// ids), so it just makes MiniIcon::updateMap's id check silently ignore
-	// this hero's movement for however long it takes to finish retiring.
-	setCharId(-1);
+	_isBenched = true;
 
-	// idle() (the despawn trigger below) only fires as the completion
-	// callback of some other action — if this hero was already resting
-	// with nothing in flight, nothing will call it again on its own, so
-	// there'd be nothing left to wait for. Despawn right away instead of
-	// waiting on a signal that isn't coming.
-	if (_state == State::IDLE || _state == State::WALK)
-	{
-		despawnRetiredHero();
-		return;
-	}
+	// Bring it to rest first (idle() resets state, knockback, stickers...),
+	// then freeze everything below.
+	if (_state != State::IDLE)
+		idle();
+	unschedule(schedule_selector(CharacterBase::setAI));
+	unschedule(schedule_selector(CharacterBase::stopMove));
 
-	// Primary despawn trigger is idle() itself — see the comment above its
-	// definition. This scheduled tick is only a timeout fallback in case
-	// idle() never ends up getting called (e.g. the hero lands in JUMP,
-	// which nothing calls idle()/walk() to end once AI decisions are
-	// suppressed).
-	schedule(schedule_selector(CharacterBase::checkRetireFinish), 0.0f);
-}
-
-void CharacterBase::checkRetireFinish(float dt)
-{
-	// _state can go back to DEAD on its own (e.g. the retiring hero gets
-	// killed by the enemy while finishing up) — dead() already owns
-	// despawning DEAD characters via its own action sequence, so back off
-	// and let that run instead of double-tearing-down here. Clear
-	// _isRetiring too: it's Role::Com, so Hero::reborn() will bring it back
-	// as a normal ally and call doAI() again — if the flag stayed set,
-	// Hero::setAI's _isRetiring guard would leave it standing inert forever
-	// after every future respawn.
-	if (_state == State::DEAD)
-	{
-		unschedule(schedule_selector(CharacterBase::checkRetireFinish));
-		_isRetiring = false;
-		return;
-	}
-
-	// Not the primary trigger — idle() calls despawnRetiredHero() directly
-	// and far more precisely the instant an action genuinely completes (see
-	// the comment on its definition for why: this used to poll _state from
-	// out here instead, but skills that route through an intermediate JUMP
-	// mid-sequence — the jump portion of the skill, not the whole thing —
-	// made that misfire early, cutting skills off partway through). This is
-	// purely a generous safety net for the rare case idle() never fires at
-	// all (e.g. stuck in bare JUMP with nothing left to end it).
-	_retireElapsed += dt;
-	if (_retireElapsed < 8.0f)
-		return;
-
-	unschedule(schedule_selector(CharacterBase::checkRetireFinish));
-	despawnRetiredHero();
-}
-
-// The actual teardown. Called from idle() (see the comment there) the
-// instant a retiring hero's current action genuinely completes, or from
-// checkRetireFinish's timeout as a fallback.
-void CharacterBase::despawnRetiredHero()
-{
-	if (!_isRetiring)
-		return;
-	_isRetiring = false;
-
-	unschedule(schedule_selector(CharacterBase::checkRetireFinish));
-	stopAllActions();
-
-	// Hero::dealloc() is written for the death path — for a "real" (not
-	// clone/kugutsu/summon) hero it schedules a reborn countdown with a
-	// skull overlay instead of actually leaving the scene, which is the
-	// wrong behavior for a retiring switched-out ally. Do the same hard
-	// removal switchToAllySlot/switchEnemyAllySlot already do instead:
-	// despawn any still-living puppet/summon linked via getMaster()/
-	// getSecMaster() (e.g. Chiyo's Parents, if it outlived her), then
-	// remove this hero itself.
-	auto& roster = getGameLayer()->_CharacterArray;
-	for (auto it = roster.begin(); it != roster.end();)
-	{
-		Hero* dependent = *it;
-		if (dependent != this && (dependent->getMaster() == this || dependent->getSecMaster() == this))
-		{
-			CCNotificationCenter::sharedNotificationCenter()->removeObserver(dependent, "acceptAttack");
-			dependent->unscheduleAllSelectors();
-			dependent->stopAllActions();
-			if (dependent->_shadow)
-				dependent->_shadow->removeFromParent();
-
-			std::erase(getMonsterArray(), (CharacterBase*)dependent);
-
-			dependent->removeFromParent();
-			it = roster.erase(it);
-		}
-		else
-		{
-			++it;
-		}
-	}
-
-	if (hasMonsterArrayAny())
-	{
-		for (auto mo : getMonsterArray())
-		{
-			CCNotificationCenter::sharedNotificationCenter()->removeObserver(mo, "acceptAttack");
-			mo->unscheduleAllSelectors();
-			mo->stopAllActions();
-			if (mo->_shadow)
-				mo->_shadow->removeFromParent();
-			mo->removeFromParent();
-		}
-		getMonsterArray().clear();
-	}
-
-	std::erase(roster, (Hero*)this);
-
-	CCNotificationCenter::sharedNotificationCenter()->removeObserver(this, "acceptAttack");
-	unscheduleAllSelectors();
+	setVisible(false);
 	if (_shadow)
-		_shadow->removeFromParent();
-	removeFromParent();
+		_shadow->setVisible(false);
+
+	// No scheduler ticks (AI, update, buff timers...) and no actions while
+	// benched. leaveBench() resumes them. NOTE: cocos re-resumes every node
+	// when a scene re-enters (e.g. coming back from the pause menu), so this
+	// freeze is best-effort -- the real guarantees are _isBenched (no
+	// AI/doAI, no damage), being out of GameLayer::_CharacterArray, and
+	// being invisible.
+	pauseSchedulerAndActions();
+
+	// Let the minimap icon (matched by charId) hide itself.
+	CCNotificationCenter::sharedNotificationCenter()->postNotification("updateMap", this);
+}
+
+void CharacterBase::leaveBench(const Vec2 &pos, bool flipped)
+{
+	if (!_isBenched)
+		return;
+
+	_isBenched = false;
+
+	resumeSchedulerAndActions();
+
+	setPosition(pos);
+	_isFlipped = flipped;
+	setFlipX(flipped);
+
+	setVisible(true);
+	if (_shadow)
+	{
+		_shadow->setVisible(true);
+		_shadow->setPosition(pos);
+	}
+	if (getParent())
+		getGameLayer()->reorderChild(this, -getPositionY());
+
+	CCNotificationCenter::sharedNotificationCenter()->postNotification("updateMap", this);
 }
 
 void CharacterBase::dealloc()
@@ -4854,6 +4753,11 @@ void CharacterBase::setAI(float dt)
 
 void CharacterBase::doAI()
 {
+	// Benched heroes never get AI (e.g. BattleRuntimeSystem::onGameStart
+	// calls doAI() on every Com hero).
+	if (_isBenched)
+		return;
+
 	_isAI = true;
 	schedule(schedule_selector(CharacterBase::setAI), 0.1f);
 }

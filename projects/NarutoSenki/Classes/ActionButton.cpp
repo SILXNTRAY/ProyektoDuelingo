@@ -319,10 +319,9 @@ bool ActionButton::isCanClick()
 				auto gl = getGameLayer();
 				auto player = gl->currentPlayer;
 				State s = player->getState();
-				// No longer blocked by attack/skill state or cBuff — see
-				// CharacterBase::retireAndDespawnWhenIdle. The outgoing hero
-				// gets handed to AI and finishes on its own instead of the
-				// click being refused.
+				// No longer blocked by attack/skill state or cBuff -- the
+				// outgoing hero is just benched (CharacterBase::enterBench)
+				// instead of the click being refused.
 				//
 				// Elimination is checked here too, not just in the visual
 				// lock (HudLayer::updateAllySwitchButtons) — this is the

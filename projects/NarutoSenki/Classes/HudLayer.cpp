@@ -38,12 +38,26 @@ void MiniIcon::updateMap(Ref *sender)
 
 	if (getCharId() == poster->getCharId())
 	{
-		if (poster->getState() == State::DEAD || poster->_isVisable == false)
+		// Benched duel heroes (see CharacterBase::enterBench) are hidden on
+		// the minimap too.
+		if (poster->getState() == State::DEAD || poster->_isVisable == false || poster->_isBenched)
 		{
 			setVisible(false);
 		}
 		else
 		{
+			// In duel modes a hero's role flips between Player (active,
+			// controlled) and Com (benched/AI) as you switch, so pick the
+			// icon from its *current* role rather than the one it had when
+			// the minimap was built.
+			if (isDuelMode() && !poster->isGuardian())
+			{
+				const char* iconName = poster->isPlayer() ? "player_icon.png"
+					: (poster->getGroup() == getGameLayer()->playerGroup ? "com_icon.png" : "enemy_icon.png");
+				auto iconFrame = getSpriteFrame(iconName);
+				if (iconFrame)
+					setDisplayFrame(iconFrame);
+			}
 			setVisible(true);
 			updatePosition(poster->getPosition());
 		}
@@ -253,9 +267,9 @@ void HudLayer::updateAllySwitchButtons(float dt)
 		return;
 
 	// Switching no longer gets blocked by the player's attack/skill state or
-	// by cBuff (see CharacterBase::retireAndDespawnWhenIdle) — the outgoing
-	// hero is handed to AI and finishes on its own instead of being cut off,
-	// so there's nothing left here to guard against. The button's own CD
+	// by cBuff -- the outgoing hero is simply benched (see
+	// CharacterBase::enterBench), nothing is cut off or despawned, so
+	// there's nothing left here to guard against. The button's own CD
 	// timer (set via setCD(15000) at creation) is a separate, unrelated
 	// rate-limit and still applies on its own.
 	//
@@ -637,6 +651,10 @@ void HudLayer::initHeroInterface()
 			miniLayer->addChild(mi);
 			mi->updatePosition(player->getSpawnPoint());
 			mi->setCharId(player->getCharId());
+			// Benched duel heroes get an icon too (it's what shows up once
+			// they're switched in) but start hidden.
+			if (player->_isBenched)
+				mi->setVisible(false);
 		}
 	}
 
@@ -682,7 +700,7 @@ void HudLayer::initHeroInterface()
 		CharacterBase* enemy = nullptr;
 		for (auto hero : getGameLayer()->_CharacterArray)
 		{
-			if (hero->isCom())
+			if (hero->isCom() && !hero->_isBenched && hero->getGroup() != getGameLayer()->playerGroup)
 			{
 				enemy = hero;
 				break;
@@ -808,7 +826,7 @@ void HudLayer::setEnemyHPLose(float percent)
 		uint32_t hp = 0;
 		for (auto hero : getGameLayer()->_CharacterArray)
 		{
-			if (hero->isCom())
+			if (hero->isCom() && !hero->_isBenched && hero->getGroup() != getGameLayer()->playerGroup)
 			{
 				hp = hero->getHP();
 				break;
